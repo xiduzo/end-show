@@ -8,6 +8,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ConnectionIndicator } from "@/components/connection-indicator";
 import { HyperText } from "@/components/hyper-text";
 import { MorphingName } from "@/components/morphing-name";
+import { StageShaderBackdrop } from "@/components/stage-shader-backdrop";
 import { WordRotate } from "@/components/word-rotate";
 import { useStageCodeStore } from "@/lib/stageCode";
 import { trpc, trpcClient } from "@/utils/trpc";
@@ -81,7 +82,7 @@ function StageRoute() {
       : null;
 
   return (
-    <div className="bg-lego-dark relative h-full overflow-hidden text-white">
+    <div className="bg-lego relative h-full overflow-hidden text-chalkboard">
       <BackgroundDecor />
       <ConnectionIndicator light />
 
@@ -109,9 +110,9 @@ function StageRoute() {
         )}
       </div>
 
-      <p className="text-mono absolute right-3 bottom-3 z-30 font-mono text-[10px] tracking-widest text-white/30 uppercase">
+      {/*<p className="text-mono absolute right-3 bottom-3 z-30 font-mono text-[10px] tracking-widest text-chalkboard/30 uppercase">
         stage · {stageCode ?? "default"}
-      </p>
+      </p>*/}
 
       {confirmOpen && (
         <ConfirmGenerate
@@ -178,7 +179,7 @@ function DwellBar({
   }, [startedAt, dwellMs]);
 
   return (
-    <div className="absolute top-0 right-0 left-0 z-20 h-1 bg-white/5">
+    <div className="absolute top-0 right-0 left-0 z-20 h-1 bg-chalkboard/5">
       <div
         className="bg-slide h-full transition-[width] duration-150 ease-linear"
         style={{ width: `${pct}%` }}
@@ -203,7 +204,7 @@ function UpNextBadge({ student }: { student: StudentSummary }) {
 
   return (
     <div
-      className="border-lego/60 bg-lego-dark/80 absolute top-6 right-6 z-20 overflow-hidden rounded-full border shadow-2xl backdrop-blur transition-[width] duration-700 ease-out"
+      className="bg-lego absolute top-8 right-8 z-20 overflow-hidden rounded-full shadow-2xl shadow-lego/50 backdrop-blur transition-[width] duration-700 ease-out"
       style={width != null ? { width } : undefined}
     >
       <div
@@ -212,12 +213,12 @@ function UpNextBadge({ student }: { student: StudentSummary }) {
       >
         <Avatar student={student} size={42} />
         <div className="leading-tight">
-          <p className="font-mono text-[10px] tracking-widest text-white/50 uppercase">
+          <p className="font-mono text-[10px] tracking-widest text-chalkboard/50 uppercase">
             Up next
           </p>
           <MorphingName
             text={student.displayName}
-            className="font-display text-base font-bold"
+            className="font-display text-chalkboard font-bold"
           />
         </div>
       </div>
@@ -227,25 +228,23 @@ function UpNextBadge({ student }: { student: StudentSummary }) {
 
 function CurrentStage({ student }: { student: StudentSummary }) {
   return (
-    <div className="relative flex h-full flex-col px-12 pt-16 pb-10">
+    <div className="relative flex h-full flex-col px-8 py-8">
       <WorkMedia student={student} />
-      <ReadabilityScrim />
 
       <div className="relative z-10 mt-auto grid grid-cols-[auto_1fr_auto] items-end gap-10">
         <Avatar student={student} size={144} withInitials />
 
         <div className="min-w-0">
-          <h1 className="font-display text-h1 flex items-baseline text-white">
+          <h1 className="font-display text-h1 flex items-baseline text-chalkboard">
             <MorphingName text={student.displayName} />
-            <span className="text-slide">.</span>
           </h1>
-          <p className="text-body-2 mt-4 max-w-3xl font-mono text-white/80">
+          <p className="text-body-2 mt-4 max-w-3xl font-mono text-chalkboard/80">
             <WordRotate
-              className="text-slide"
+              className="text-chalkboard"
               word={student.pronouns}
               delay={1000}
             />
-            <span className="text-white/40"> — </span>
+            <span className="text-chalkboard/40"> — </span>
             <HyperText duration={400} delay={1200}>
               {student.introduction}
             </HyperText>
@@ -268,7 +267,7 @@ function CurrentStage({ student }: { student: StudentSummary }) {
                     delay: 1.6 + i * 0.12,
                     ease: "easeOut",
                   }}
-                  className="rounded-full border border-white/25 px-4 py-1 font-mono text-sm text-white/85"
+                  className="rounded-full border border-chalkboard/25 font-extrabold px-4 py-1 font-mono text-sm text-chalkboard/85"
                 >
                   {c}
                 </motion.span>
@@ -299,25 +298,24 @@ function WorkMedia({ student }: { student: StudentSummary }) {
     );
   }
 
-  const imgSrc =
-    workMediaUrl && workMediaKind === "work-image"
-      ? workMediaUrl
-      : "https://placehold.net/9-800x600.png";
+  if (workMediaUrl && workMediaKind === "work-image") {
+    return (
+      <img
+        src={workMediaUrl}
+        alt={`${displayName} work`}
+        className="absolute inset-0 z-0 h-full w-full object-cover"
+      />
+    );
+  }
 
   return (
-    <img
-      src={imgSrc}
-      alt={`${displayName} work`}
+    <video
+      src="https://www.pexels.com/download/video/30282548/"
+      autoPlay
+      muted
+      loop
+      playsInline
       className="absolute inset-0 z-0 h-full w-full object-cover"
-    />
-  );
-}
-
-function ReadabilityScrim() {
-  return (
-    <div
-      aria-hidden
-      className="from-lego-dark/95 via-lego-dark/70 absolute inset-0 z-0 bg-gradient-to-t to-transparent"
     />
   );
 }
@@ -341,7 +339,7 @@ function Avatar({
   if (student.portraitUrl) {
     return (
       <div
-        className="relative overflow-hidden rounded-full border border-white/15"
+        className="relative overflow-hidden rounded-full border border-chalkboard/15"
         style={{ width: size, height: size }}
       >
         <img
@@ -355,7 +353,7 @@ function Avatar({
 
   return (
     <div
-      className="relative flex items-center justify-center overflow-hidden rounded-full bg-white/95"
+      className="relative flex items-center justify-center overflow-hidden rounded-full bg-chalkboard/95"
       style={{
         width: size,
         height: size,
@@ -364,7 +362,7 @@ function Avatar({
       }}
     >
       {withInitials && (
-        <span className="text-lego-dark font-mono text-xs tracking-widest">
+        <span className="text-lego font-mono text-xs tracking-widest">
           {initials}
         </span>
       )}
@@ -381,13 +379,12 @@ function LinkQr({ url }: { url: string }) {
   }
   return (
     <div className="flex flex-col items-end gap-2">
-      <div className="rounded-xl bg-white p-3">
-        <QRCodeSVG value={url} size={120} bgColor="#ffffff" fgColor="#000000" />
-      </div>
-      <p className="font-mono text-[10px] tracking-widest text-white/40 uppercase">
-        scan →
+      <p className="font-mono text-[10px] pr-0.5 tracking-widest text-chalkboard/80 uppercase">
+        scan me
       </p>
-      <p className="font-display text-sm font-bold text-white">{host}</p>
+      <div className="rounded-xl bg-chalkboard p-3">
+        <QRCodeSVG value={url} size={126} bgColor="#F8F9FA" fgColor="#06063C" />
+      </div>
     </div>
   );
 }
@@ -401,12 +398,12 @@ function Idle({ stageCode }: { stageCode: string | null }) {
         <h1 className="font-display text-h1 leading-none">
           End Show<span className="text-slide">.</span>
         </h1>
-        <p className="mt-3 font-mono text-sm tracking-widest text-white/40 uppercase">
+        <p className="mt-3 font-mono text-sm tracking-widest text-chalkboard/40 uppercase">
           Master Digital Design · graduation
         </p>
       </div>
       <div className="flex flex-col items-center gap-3">
-        <div className="rounded-xl bg-white p-3">
+        <div className="rounded-xl bg-chalkboard p-3">
           <QRCodeSVG
             value={companion}
             size={220}
@@ -414,11 +411,11 @@ function Idle({ stageCode }: { stageCode: string | null }) {
             fgColor="#000000"
           />
         </div>
-        <p className="font-mono text-[11px] tracking-widest text-white/50 uppercase">
+        <p className="font-mono text-[11px] tracking-widest text-chalkboard/50 uppercase">
           scan → companion
         </p>
       </div>
-      <p className="font-mono text-xs text-white/30">
+      <p className="font-mono text-xs text-chalkboard/30">
         Tap a student on your phone to bring them on stage.
       </p>
     </div>
@@ -437,25 +434,25 @@ function ConfirmGenerate({
   onClear: () => void;
 }) {
   return (
-    <div className="bg-lego-dark/80 absolute inset-0 z-40 flex items-center justify-center backdrop-blur">
-      <div className="border-lego/40 bg-lego-dark w-96 rounded-2xl border p-6">
+    <div className="bg-lego/80 absolute inset-0 z-40 flex items-center justify-center backdrop-blur">
+      <div className="border-lego/40 bg-lego w-96 rounded-2xl border p-6">
         <h2 className="font-display text-lg font-bold">Stage setup</h2>
-        <p className="mt-2 font-mono text-sm text-white/60">
+        <p className="mt-2 font-mono text-sm text-chalkboard/60">
           Current:{" "}
           {currentCode ? (
             <code className="text-slide">{currentCode}</code>
           ) : (
-            <span className="text-white/40">default channel</span>
+            <span className="text-chalkboard/40">default channel</span>
           )}
         </p>
-        <p className="mt-4 text-sm text-white/80">
+        <p className="mt-4 text-sm text-chalkboard/80">
           Generate a new code, return to default, or cancel.
         </p>
         <div className="mt-6 flex justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-full border border-white/20 px-4 py-1.5 text-sm"
+            className="rounded-full border border-chalkboard/20 px-4 py-1.5 text-sm"
           >
             Cancel
           </button>
@@ -463,7 +460,7 @@ function ConfirmGenerate({
             <button
               type="button"
               onClick={onClear}
-              className="rounded-full border border-white/20 px-4 py-1.5 text-sm"
+              className="rounded-full border border-chalkboard/20 px-4 py-1.5 text-sm"
             >
               Use default
             </button>
@@ -471,7 +468,7 @@ function ConfirmGenerate({
           <button
             type="button"
             onClick={onGenerate}
-            className="bg-slide text-lego-dark rounded-full px-4 py-1.5 text-sm font-bold"
+            className="bg-slide text-lego rounded-full px-4 py-1.5 text-sm font-bold"
           >
             Generate
           </button>

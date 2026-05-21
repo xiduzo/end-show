@@ -1,10 +1,18 @@
+import type { StageColor } from "@end-show/api/routers/student";
 import { Button } from "@end-show/ui/components/button";
 import { Input } from "@end-show/ui/components/input";
 import { Label } from "@end-show/ui/components/label";
+import { cn } from "@end-show/ui/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+
+const STAGE_COLORS: { value: StageColor; label: string; hex: string }[] = [
+  { value: "slime", label: "Slime", hex: "#D9E73C" },
+  { value: "crayon", label: "Crayon", hex: "#F2BB06" },
+  { value: "bubblegum", label: "Bubblegum", hex: "#F3B9FF" },
+];
 
 import { BudgetTransferDialog } from "@/components/budget-transfer-dialog";
 import { UploadWidget } from "@/components/upload-widget";
@@ -44,6 +52,7 @@ function ProfileRoute() {
   const [link, setLink] = useState("");
   const [compInput, setCompInput] = useState("");
   const [competencies, setCompetencies] = useState<string[]>([]);
+  const [stageColor, setStageColor] = useState<StageColor | null>(null);
 
   useEffect(() => {
     if (!profile.data) return;
@@ -52,6 +61,7 @@ function ProfileRoute() {
     setIntroduction(profile.data.introduction);
     setLink(profile.data.link);
     setCompetencies(profile.data.competencies);
+    setStageColor(profile.data.stageColor);
   }, [profile.data]);
 
   const addComp = () => {
@@ -71,6 +81,7 @@ function ProfileRoute() {
         pronouns,
         introduction,
         link,
+        stageColor,
         competencies,
       });
       toast.success("Profile saved");
@@ -213,6 +224,48 @@ function ProfileRoute() {
             onChange={(e) => setLink(e.target.value)}
             placeholder="https://"
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Stage color</Label>
+          <p className="text-xs text-muted-foreground">
+            Backdrop tint when you appear on the big screen.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {STAGE_COLORS.map((c) => {
+              const active = stageColor === c.value;
+              return (
+                <button
+                  type="button"
+                  key={c.value}
+                  onClick={() => setStageColor(active ? null : c.value)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition",
+                    active
+                      ? "border-foreground shadow"
+                      : "border-zinc-200 hover:border-zinc-400",
+                  )}
+                  aria-pressed={active}
+                >
+                  <span
+                    aria-hidden
+                    className="h-5 w-5 rounded-full border border-black/10"
+                    style={{ background: c.hex }}
+                  />
+                  {c.label}
+                </button>
+              );
+            })}
+            {stageColor && (
+              <button
+                type="button"
+                onClick={() => setStageColor(null)}
+                className="text-xs text-muted-foreground hover:underline"
+              >
+                clear
+              </button>
+            )}
+          </div>
         </div>
 
         <UploadWidget

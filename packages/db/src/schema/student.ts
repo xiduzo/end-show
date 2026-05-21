@@ -11,6 +11,7 @@ export const student = sqliteTable("student", {
   pronouns: text("pronouns").notNull().default(""),
   introduction: text("introduction").notNull().default(""),
   link: text("link").notNull().default(""),
+  stageColor: text("stage_color"),
   portraitAssetId: text("portrait_asset_id"),
   workMediaAssetId: text("work_media_asset_id"),
   isPublished: integer("is_published", { mode: "boolean" }).notNull().default(false),

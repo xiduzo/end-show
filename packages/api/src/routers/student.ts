@@ -9,12 +9,15 @@ import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "../index";
 import { publicUrlFor } from "../r2";
 
+export type StageColor = "slime" | "crayon" | "bubblegum";
+
 export type StudentSummary = {
   userId: string;
   displayName: string;
   pronouns: string;
   introduction: string;
   link: string;
+  stageColor: StageColor | null;
   portraitUrl: string | null;
   workMediaUrl: string | null;
   workMediaKind: "work-image" | "work-video" | null;
@@ -27,6 +30,7 @@ export type MyProfile = {
   pronouns: string;
   introduction: string;
   link: string;
+  stageColor: StageColor | null;
   isPublished: boolean;
   competencies: string[];
   portraitUrl: string | null;
@@ -44,11 +48,14 @@ function isComplete(s: Omit<StudentSummary, "portraitUrl" | "workMediaUrl" | "wo
   );
 }
 
+const stageColorSchema = z.enum(["slime", "crayon", "bubblegum"]);
+
 const profileInput = z.object({
   displayName: z.string().trim().min(1).max(80),
   pronouns: z.string().trim().min(1).max(40),
   introduction: z.string().trim().min(1).max(500),
   link: z.string().trim().url().max(300),
+  stageColor: stageColorSchema.nullable(),
   competencies: z
     .array(z.string().trim().min(1).max(40))
     .min(1)
@@ -83,6 +90,7 @@ export const studentRouter = router({
         pronouns: r.pronouns,
         introduction: r.introduction,
         link: r.link,
+        stageColor: (r.stageColor as StageColor | null) ?? null,
         portraitUrl: portrait ? publicUrlFor(portrait.r2Key) : null,
         workMediaUrl: work ? publicUrlFor(work.r2Key) : null,
         workMediaKind:
@@ -120,6 +128,7 @@ export const studentRouter = router({
       pronouns: row.pronouns,
       introduction: row.introduction,
       link: row.link,
+      stageColor: (row.stageColor as StageColor | null) ?? null,
       isPublished: row.isPublished,
       competencies: comps.map((c) => c.tag),
       portraitUrl: portraitRow ? publicUrlFor(portraitRow.r2Key) : null,
@@ -143,6 +152,7 @@ export const studentRouter = router({
           pronouns: input.pronouns,
           introduction: input.introduction,
           link: input.link,
+          stageColor: input.stageColor,
           isPublished: false,
         });
       } else {
@@ -153,6 +163,7 @@ export const studentRouter = router({
             pronouns: input.pronouns,
             introduction: input.introduction,
             link: input.link,
+            stageColor: input.stageColor,
             updatedAt: new Date(),
           })
           .where(eq(student.userId, userId));

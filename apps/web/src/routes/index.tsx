@@ -86,6 +86,10 @@ function StageRoute() {
       <BackgroundDecor />
       <ConnectionIndicator light />
 
+      {students.data && (
+        <AssetPreloader students={students.data} nextUserId={nextId} />
+      )}
+
       <button
         type="button"
         aria-label="Stage setup gesture"
@@ -191,6 +195,7 @@ function DwellBar({
 function UpNextBadge({ student }: { student: StudentSummary }) {
   const innerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState<number | null>(null);
+  const scrim = resolveScrim(student);
 
   useLayoutEffect(() => {
     const el = innerRef.current;
@@ -204,8 +209,12 @@ function UpNextBadge({ student }: { student: StudentSummary }) {
 
   return (
     <div
-      className="bg-lego absolute top-8 right-8 z-20 overflow-hidden rounded-full shadow-2xl shadow-lego/50 backdrop-blur transition-[width] duration-700 ease-out"
-      style={width != null ? { width } : undefined}
+      className="absolute top-8 right-8 z-20 overflow-hidden rounded-full backdrop-blur transition-[width,background-color,box-shadow] duration-700 ease-out"
+      style={{
+        ...(width != null ? { width } : {}),
+        backgroundColor: scrim.dark,
+        boxShadow: `0 25px 50px -12px ${scrim.dark}80`,
+      }}
     >
       <div
         ref={innerRef}
@@ -226,12 +235,52 @@ function UpNextBadge({ student }: { student: StudentSummary }) {
   );
 }
 
+const STAGE_SCRIM: Record<string, { dark: string; accent: string }> = {
+  slime: { dark: "#363a0a", accent: "#d9e73c" },
+  crayon: { dark: "#493b00", accent: "#f2bb06" },
+  bubblegum: { dark: "#3e064a", accent: "#f3b9ff" },
+};
+const STAGE_SCRIM_KEYS = Object.keys(STAGE_SCRIM);
+
+function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++)
+    h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+function resolveScrim(student: StudentSummary): {
+  dark: string;
+  accent: string;
+} {
+  const key =
+    student.stageColor ??
+    STAGE_SCRIM_KEYS[hashStr(student.userId) % STAGE_SCRIM_KEYS.length]!;
+  return STAGE_SCRIM[key]!;
+}
+
 function CurrentStage({ student }: { student: StudentSummary }) {
+  const scrim = resolveScrim(student);
+
   return (
     <div className="relative flex h-full flex-col px-8 py-8">
       <WorkMedia student={student} />
 
-      <div className="relative z-10 mt-auto grid grid-cols-[auto_1fr_auto] items-end gap-10">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-[55%] transition-[background-color] duration-700 ease-out"
+        style={{
+          backgroundColor: scrim.dark,
+          maskImage:
+            "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.75) 40%, rgba(0,0,0,0) 100%)",
+          WebkitMaskImage:
+            "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.75) 40%, rgba(0,0,0,0) 100%)",
+        }}
+      />
+      <div
+        className="relative z-10 mt-auto grid grid-cols-[auto_1fr_auto] items-end gap-10"
+        style={{ textShadow: "0 1px 12px rgba(0,0,0,0.45)" }}
+      >
         <Avatar student={student} size={144} withInitials />
 
         <div className="min-w-0">
@@ -276,32 +325,151 @@ function CurrentStage({ student }: { student: StudentSummary }) {
           </div>
         </div>
 
-        {student.link && <LinkQr url={student.link} />}
+        {student.link && <LinkQr url={student.link} scrim={scrim} />}
       </div>
     </div>
   );
 }
 
-function WorkMedia({ student }: { student: StudentSummary }) {
-  const { workMediaUrl, workMediaKind, displayName } = student;
+const FALLBACK_VIDEOS = [
+  "https://www.pexels.com/download/video/5384977/",
+  "https://www.pexels.com/download/video/7807288/",
+  "https://www.pexels.com/download/video/20463055/",
+  "https://www.pexels.com/download/video/9903008/",
+  "https://www.pexels.com/download/video/9618370/",
+  "https://www.pexels.com/download/video/7610989/",
+  "https://www.pexels.com/download/video/4622464/",
+  "https://www.pexels.com/download/video/7762408/",
+  "https://www.pexels.com/download/video/6608009/",
+  "https://www.pexels.com/download/video/4125748/",
+] as const;
 
-  if (workMediaUrl && workMediaKind === "work-video") {
-    return (
-      <video
-        src={workMediaUrl}
-        autoPlay
-        muted
-        loop
-        playsInline
-        className="absolute inset-0 z-0 h-full w-full object-cover"
-      />
-    );
+function pickFallbackVideo(key: string): string {
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash * 31 + key.charCodeAt(i)) | 0;
   }
+  const index = Math.abs(hash) % FALLBACK_VIDEOS.length;
+  return FALLBACK_VIDEOS[index]!;
+}
 
-  if (workMediaUrl && workMediaKind === "work-image") {
+type ResolvedWorkMedia =
+  | { kind: "video"; url: string }
+  | { kind: "image"; url: string };
+
+function resolveWorkMedia(student: StudentSummary): ResolvedWorkMedia {
+  if (student.workMediaUrl && student.workMediaKind === "work-video") {
+    return { kind: "video", url: student.workMediaUrl };
+  }
+  if (student.workMediaUrl && student.workMediaKind === "work-image") {
+    return { kind: "image", url: student.workMediaUrl };
+  }
+  return { kind: "video", url: pickFallbackVideo(student.userId) };
+}
+
+function AssetPreloader({
+  students,
+  nextUserId,
+}: {
+  students: StudentSummary[];
+  nextUserId: string | null;
+}) {
+  const nextStudent = nextUserId
+    ? students.find((s) => s.userId === nextUserId)
+    : null;
+  const nextMedia = nextStudent ? resolveWorkMedia(nextStudent) : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    const warmed = new Set<string>();
+    const urls: string[] = [];
+    for (const s of students) {
+      if (s.portraitUrl) urls.push(s.portraitUrl);
+      const m = resolveWorkMedia(s);
+      urls.push(m.url);
+    }
+
+    async function warm() {
+      for (const url of urls) {
+        if (cancelled) return;
+        if (warmed.has(url)) continue;
+        warmed.add(url);
+        try {
+          await fetch(url, { mode: "no-cors", cache: "force-cache" });
+        } catch {
+          // swallow — SW will retry on first real use
+        }
+      }
+    }
+
+    const idle = (
+      window as unknown as {
+        requestIdleCallback?: (cb: () => void) => number;
+      }
+    ).requestIdleCallback;
+    const handle = idle
+      ? idle(warm)
+      : window.setTimeout(warm, 1500);
+
+    return () => {
+      cancelled = true;
+      const cancelIdle = (
+        window as unknown as {
+          cancelIdleCallback?: (h: number) => void;
+        }
+      ).cancelIdleCallback;
+      if (idle && cancelIdle) cancelIdle(handle as number);
+      else window.clearTimeout(handle as number);
+    };
+  }, [students]);
+
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none fixed -z-50 h-0 w-0 overflow-hidden opacity-0"
+    >
+      {students.map((s) =>
+        s.portraitUrl ? (
+          <img
+            key={`portrait-${s.userId}`}
+            src={s.portraitUrl}
+            alt=""
+            loading="eager"
+            decoding="async"
+          />
+        ) : null,
+      )}
+      {nextStudent && nextMedia ? (
+        nextMedia.kind === "video" ? (
+          <video
+            key={`next-video-${nextStudent.userId}`}
+            src={nextMedia.url}
+            muted
+            playsInline
+            preload="auto"
+          />
+        ) : (
+          <img
+            key={`next-image-${nextStudent.userId}`}
+            src={nextMedia.url}
+            alt=""
+            loading="eager"
+            decoding="async"
+          />
+        )
+      ) : null}
+    </div>
+  );
+}
+
+function WorkMedia({ student }: { student: StudentSummary }) {
+  const { displayName } = student;
+  const media = resolveWorkMedia(student);
+
+  if (media.kind === "image") {
     return (
       <img
-        src={workMediaUrl}
+        src={media.url}
         alt={`${displayName} work`}
         className="absolute inset-0 z-0 h-full w-full object-cover"
       />
@@ -310,7 +478,7 @@ function WorkMedia({ student }: { student: StudentSummary }) {
 
   return (
     <video
-      src="https://www.pexels.com/download/video/30282548/"
+      src={media.url}
       autoPlay
       muted
       loop
@@ -370,7 +538,13 @@ function Avatar({
   );
 }
 
-function LinkQr({ url }: { url: string }) {
+function LinkQr({
+  url,
+  scrim,
+}: {
+  url: string;
+  scrim: { dark: string; accent: string };
+}) {
   let host = url;
   try {
     host = new URL(url).host.replace(/^www\./, "");
@@ -379,11 +553,16 @@ function LinkQr({ url }: { url: string }) {
   }
   return (
     <div className="flex flex-col items-end gap-2">
-      <p className="font-mono text-[10px] pr-0.5 tracking-widest text-chalkboard/80 uppercase">
+      <p className="font-mono text-[10px] pr-1 tracking-widest text-chalkboard/80 uppercase">
         scan me
       </p>
-      <div className="rounded-xl bg-chalkboard p-3">
-        <QRCodeSVG value={url} size={126} bgColor="#F8F9FA" fgColor="#06063C" />
+      <div className="qr-tinted rounded-xl bg-chalkboard p-3">
+        <QRCodeSVG
+          value={url}
+          size={126}
+          bgColor="#F8F9FA"
+          fgColor={scrim.dark}
+        />
       </div>
     </div>
   );

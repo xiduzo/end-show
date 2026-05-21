@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ConnectionIndicator } from "@/components/connection-indicator";
+import { StageShaderBackdrop } from "@/components/stage-shader-backdrop";
 import { isValidStageCode, useStageCodeStore } from "@/lib/stageCode";
 import { trpc, trpcClient } from "@/utils/trpc";
 
@@ -178,7 +179,15 @@ export function CompanionView({
 
   return (
     <div className="bg-lego relative flex h-full min-h-screen flex-col overflow-hidden text-chalkboard">
-      <BgGrid />
+      {focused ? (
+        <StageShaderBackdrop
+          color={focused.stageColor ?? null}
+          seed={focused.userId}
+          variant="full"
+        />
+      ) : (
+        <BgGrid />
+      )}
       <ConnectionIndicator light />
 
       <Header

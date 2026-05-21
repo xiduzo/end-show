@@ -195,6 +195,10 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
     }
+    .qr-tinted svg path,
+    .qr-tinted svg rect {
+        transition: fill 700ms ease-out;
+    }
 }
 
 @utility text-lego {

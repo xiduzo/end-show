@@ -10,7 +10,19 @@ type Seed = {
   intro: string;
   link: string;
   tags: string[];
+  stageColor: "slime" | "crayon" | "bubblegum" | null;
 };
+
+const STAGE_COLOR_CYCLE: Array<"slime" | "crayon" | "bubblegum" | null> = [
+  "slime",
+  "crayon",
+  "bubblegum",
+  null,
+  "slime",
+  null,
+  "crayon",
+  "bubblegum",
+];
 
 const SEED_NAMES: Array<[string, string]> = [
   ["Alice", "Andersen"],
@@ -121,6 +133,7 @@ const STUDENTS: Seed[] = SEED_NAMES.map(([first, last], i) => {
     intro: INTROS[i % INTROS.length]!,
     link: `https://example.com/${slug(first)}-${slug(last)}`,
     tags: tagA === tagB ? [tagA] : [tagA, tagB],
+    stageColor: STAGE_COLOR_CYCLE[i % STAGE_COLOR_CYCLE.length]!,
   };
 });
 
@@ -161,9 +174,20 @@ export async function seedStudents(): Promise<void> {
         pronouns: s.pronouns,
         introduction: s.intro,
         link: s.link,
+        stageColor: s.stageColor,
         isPublished: true,
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: student.userId,
+        set: {
+          displayName: s.name,
+          pronouns: s.pronouns,
+          introduction: s.intro,
+          link: s.link,
+          stageColor: s.stageColor,
+          isPublished: true,
+        },
+      });
     for (const t of s.tags) {
       await db
         .insert(studentCompetency)

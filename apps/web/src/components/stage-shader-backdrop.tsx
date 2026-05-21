@@ -1,6 +1,6 @@
 import type { StageColor } from "@end-show/api/routers/student";
 import { ShaderGradient, ShaderGradientCanvas } from "@shadergradient/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const PALETTE: Record<StageColor, [string, string, string][]> = {
   slime: [
@@ -65,10 +65,28 @@ function lerpHex(a: string, b: string, t: number): string {
 
 // 18s per palette variant, smooth easing
 const CYCLE_MS = 18000;
+// Palette-to-palette crossfade when the student changes
+const PALETTE_CROSSFADE_MS = 1200;
 
-function useCyclingTriplet(
+function tripletAt(
   variants: [string, string, string][],
+  elapsed: number,
 ): [string, string, string] {
+  const n = variants.length;
+  const phase = (elapsed / CYCLE_MS) % n;
+  const i = Math.floor(phase);
+  const t = phase - i;
+  const ease = t * t * (3 - 2 * t);
+  const a = variants[i];
+  const b = variants[(i + 1) % n];
+  return [
+    lerpHex(a[0], b[0], ease),
+    lerpHex(a[1], b[1], ease),
+    lerpHex(a[2], b[2], ease),
+  ];
+}
+
+function useTick(): number {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     let raf = 0;
@@ -80,43 +98,72 @@ function useCyclingTriplet(
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
+  return tick;
+}
 
-  const n = variants.length;
-  const phase = (tick / CYCLE_MS) % n;
-  const i = Math.floor(phase);
-  const t = phase - i;
-  // ease in/out
+function useTransitioningTriplet(
+  resolved: StageColor,
+): [string, string, string] {
+  const tick = useTick();
+  const prevRef = useRef<StageColor>(resolved);
+  const transitionStartRef = useRef<number | null>(null);
+
+  if (prevRef.current !== resolved && transitionStartRef.current === null) {
+    transitionStartRef.current = performance.now();
+  }
+
+  const target = tripletAt(PALETTE[resolved], tick);
+  const start = transitionStartRef.current;
+  if (start === null) return target;
+
+  const elapsed = performance.now() - start;
+  const t = Math.min(1, elapsed / PALETTE_CROSSFADE_MS);
   const ease = t * t * (3 - 2 * t);
-  const a = variants[i];
-  const b = variants[(i + 1) % n];
+  const from = tripletAt(PALETTE[prevRef.current], tick);
+
+  if (t >= 1) {
+    prevRef.current = resolved;
+    transitionStartRef.current = null;
+    return target;
+  }
+
   return [
-    lerpHex(a[0], b[0], ease),
-    lerpHex(a[1], b[1], ease),
-    lerpHex(a[2], b[2], ease),
+    lerpHex(from[0], target[0], ease),
+    lerpHex(from[1], target[1], ease),
+    lerpHex(from[2], target[2], ease),
   ];
 }
 
 export function StageShaderBackdrop({
   color,
   seed,
+  variant = "bottom",
 }: {
   color: StageColor | null;
   seed: string;
+  variant?: "bottom" | "full";
 }) {
   const resolved = resolveStageColor(color, seed);
-  const [c1, c2, c3] = useCyclingTriplet(PALETTE[resolved]);
+  const [c1, c2, c3] = useTransitioningTriplet(resolved);
 
   // Shader band lives in the lower ~35% of the screen, with the top edge
   // feathered so it blends into the work media.
   const maskImage =
     "linear-gradient(to top, rgba(0,0,0,1) 30%, rgba(0,0,0,0.85) 60%, rgba(0,0,0,0) 100%)";
+  const isFull = variant === "full";
 
   return (
     <>
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-0 h-[35%]"
-        style={{ WebkitMaskImage: maskImage, maskImage }}
+        className={
+          isFull
+            ? "pointer-events-none absolute inset-0 z-0"
+            : "pointer-events-none absolute inset-x-0 bottom-0 z-0 h-[35%]"
+        }
+        style={
+          isFull ? undefined : { WebkitMaskImage: maskImage, maskImage }
+        }
       >
         <ShaderGradientCanvas
           style={{ position: "absolute", inset: 0 }}
@@ -125,38 +172,51 @@ export function StageShaderBackdrop({
         >
           <ShaderGradient
             control="props"
+            animate="on"
             type="waterPlane"
+            shader="defaults"
             color1={c1}
             color2={c2}
             color3={c3}
-            uTime={0}
-            uSpeed={0.05}
-            uStrength={1.4}
-            uDensity={1.3}
-            uFrequency={0}
-            uAmplitude={0}
-            positionX={0}
-            positionY={0}
-            positionZ={0}
-            rotationX={50}
-            rotationY={0}
-            rotationZ={-60}
-            cameraZoom={9.1}
-            lightType="3d"
+            bgColor1="#000000"
+            bgColor2="#000000"
             brightness={1.1}
+            cAzimuthAngle={180}
+            cDistance={3.9}
+            cPolarAngle={115}
+            cameraZoom={1}
             envPreset="city"
+            fov={45}
+            frameRate={10}
             grain="off"
-            reflection={0.1}
-            range="enabled"
-            rangeStart={0}
+            lightType="3d"
+            positionX={-0.5}
+            positionY={0.1}
+            positionZ={0}
+            range="disabled"
             rangeEnd={40}
+            rangeStart={0}
+            reflection={0.1}
+            rotationX={0}
+            rotationY={0}
+            rotationZ={235}
+            uAmplitude={0}
+            uDensity={1.1}
+            uFrequency={5.5}
+            uSpeed={0.1}
+            uStrength={2.4}
+            uTime={0.2}
           />
         </ShaderGradientCanvas>
       </div>
       {/* Readability gradient: dark at the bottom for text contrast, fades up */}
       <div
         aria-hidden
-        className="from-lego/85 via-lego/30 pointer-events-none absolute inset-0 z-0 bg-linear-to-t to-transparent"
+        className={
+          isFull
+            ? "from-lego/40 pointer-events-none absolute inset-0 z-0 bg-linear-to-t to-transparent"
+            : "from-lego/85 via-lego/30 pointer-events-none absolute inset-0 z-0 bg-linear-to-t to-transparent"
+        }
       />
     </>
   );

@@ -27,11 +27,13 @@
     "dotenv": "catalog:",
     "lucide-react": "^1.8.0",
     "next-themes": "catalog:",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "sonner": "^2.0.7",
     "vite-plugin-pwa": "^1.2.0",
-    "zod": "catalog:"
+    "zod": "catalog:",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@end-show/config": "workspace:*",

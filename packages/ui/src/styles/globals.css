@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Sometype+Mono:wght@400;500;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -5,6 +6,68 @@
 @source "../**/*.{ts,tsx}";
 
 @custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-display: "Montserrat", sans-serif;
+  --font-mono: "Sometype Mono", ui-monospace, monospace;
+
+  --color-lego: #3a39ff;
+  --color-lego-dark: #06063c;
+  --color-chalkboard: #f8f9fa;
+  --color-ink: #000000;
+
+  --color-slide: #ff5b23;
+  --color-slide-dark: #481b07;
+
+  --color-slime: #d9e73c;
+  --color-slime-dark: #363a0a;
+  --color-crayon: #f2bb06;
+  --color-crayon-dark: #493b00;
+  --color-bubblegum: #f3b9ff;
+  --color-bubblegum-dark: #3e064a;
+
+  --text-title-1: 17.125rem;
+  --text-title-1--line-height: 1.2;
+  --text-title-1--letter-spacing: -0.03em;
+  --text-title-1--font-weight: 700;
+
+  --text-title-2: 12.5rem;
+  --text-title-2--line-height: 1.2;
+  --text-title-2--letter-spacing: -0.04em;
+  --text-title-2--font-weight: 700;
+
+  --text-h1: 9.5rem;
+  --text-h1--line-height: 1.2;
+  --text-h1--letter-spacing: -0.02em;
+  --text-h1--font-weight: 700;
+
+  --text-h2: 4rem;
+  --text-h2--line-height: 1.2;
+  --text-h2--letter-spacing: 0.02em;
+  --text-h2--font-weight: 700;
+
+  --text-h3: 1.5rem;
+  --text-h3--line-height: 1.2;
+  --text-h3--letter-spacing: 0em;
+  --text-h3--font-weight: 700;
+
+  --text-h4: 1.25rem;
+  --text-h4--line-height: 1.2;
+  --text-h4--letter-spacing: 0em;
+  --text-h4--font-weight: 700;
+
+  --text-body-1: 2.25rem;
+  --text-body-1--line-height: 1.2;
+  --text-body-1--letter-spacing: -0.02em;
+
+  --text-body-2: 1.25rem;
+  --text-body-2--line-height: 1.2;
+  --text-body-2--letter-spacing: -0.02em;
+
+  --text-body-3: 1.25rem;
+  --text-body-3--line-height: 1.2;
+  --text-body-3--letter-spacing: -0.02em;
+}
 
 :root {
   --background: oklch(1 0 0);

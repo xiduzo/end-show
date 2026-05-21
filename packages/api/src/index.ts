@@ -23,3 +23,14 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
     },
   });
 });
+
+export const staffProcedure = protectedProcedure.use(({ ctx, next }) => {
+  const role = (ctx.session.user as { role?: string }).role;
+  if (role !== "staff") {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Staff only",
+    });
+  }
+  return next({ ctx });
+});

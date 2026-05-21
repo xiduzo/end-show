@@ -51,7 +51,7 @@ export default function SignInForm() {
         return;
       }
       toast.success("Signed in");
-      navigate({ to: "/dashboard" });
+      navigate({ to: "/admin" });
     },
     validators: {
       onSubmit: z.object({ otp: z.string().length(6, "6-digit code") }),

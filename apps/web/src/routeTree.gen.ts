@@ -9,22 +9,14 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as StageRouteImport } from './routes/stage'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CompanionRouteImport } from './routes/companion'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as CompanionKioskRouteImport } from './routes/companion.kiosk'
 import { Route as AdminStudentsRouteImport } from './routes/admin.students'
 import { Route as AdminStudentsUserIdRouteImport } from './routes/admin.students.$userId'
 
-const StageRoute = StageRouteImport.update({
-  id: '/stage',
-  path: '/stage',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -33,11 +25,6 @@ const ProfileRoute = ProfileRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DashboardRoute = DashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CompanionRoute = CompanionRouteImport.update({
@@ -55,11 +42,6 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CompanionKioskRoute = CompanionKioskRouteImport.update({
-  id: '/kiosk',
-  path: '/kiosk',
-  getParentRoute: () => CompanionRoute,
-} as any)
 const AdminStudentsRoute = AdminStudentsRouteImport.update({
   id: '/students',
   path: '/students',
@@ -74,38 +56,29 @@ const AdminStudentsUserIdRoute = AdminStudentsUserIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
-  '/companion': typeof CompanionRouteWithChildren
-  '/dashboard': typeof DashboardRoute
+  '/companion': typeof CompanionRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
-  '/stage': typeof StageRoute
   '/admin/students': typeof AdminStudentsRouteWithChildren
-  '/companion/kiosk': typeof CompanionKioskRoute
   '/admin/students/$userId': typeof AdminStudentsUserIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
-  '/companion': typeof CompanionRouteWithChildren
-  '/dashboard': typeof DashboardRoute
+  '/companion': typeof CompanionRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
-  '/stage': typeof StageRoute
   '/admin/students': typeof AdminStudentsRouteWithChildren
-  '/companion/kiosk': typeof CompanionKioskRoute
   '/admin/students/$userId': typeof AdminStudentsUserIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
-  '/companion': typeof CompanionRouteWithChildren
-  '/dashboard': typeof DashboardRoute
+  '/companion': typeof CompanionRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
-  '/stage': typeof StageRoute
   '/admin/students': typeof AdminStudentsRouteWithChildren
-  '/companion/kiosk': typeof CompanionKioskRoute
   '/admin/students/$userId': typeof AdminStudentsUserIdRoute
 }
 export interface FileRouteTypes {
@@ -114,58 +87,40 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/companion'
-    | '/dashboard'
     | '/login'
     | '/profile'
-    | '/stage'
     | '/admin/students'
-    | '/companion/kiosk'
     | '/admin/students/$userId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/admin'
     | '/companion'
-    | '/dashboard'
     | '/login'
     | '/profile'
-    | '/stage'
     | '/admin/students'
-    | '/companion/kiosk'
     | '/admin/students/$userId'
   id:
     | '__root__'
     | '/'
     | '/admin'
     | '/companion'
-    | '/dashboard'
     | '/login'
     | '/profile'
-    | '/stage'
     | '/admin/students'
-    | '/companion/kiosk'
     | '/admin/students/$userId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
-  CompanionRoute: typeof CompanionRouteWithChildren
-  DashboardRoute: typeof DashboardRoute
+  CompanionRoute: typeof CompanionRoute
   LoginRoute: typeof LoginRoute
   ProfileRoute: typeof ProfileRoute
-  StageRoute: typeof StageRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/stage': {
-      id: '/stage'
-      path: '/stage'
-      fullPath: '/stage'
-      preLoaderRoute: typeof StageRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/profile': {
       id: '/profile'
       path: '/profile'
@@ -178,13 +133,6 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/dashboard': {
-      id: '/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/companion': {
@@ -207,13 +155,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/companion/kiosk': {
-      id: '/companion/kiosk'
-      path: '/kiosk'
-      fullPath: '/companion/kiosk'
-      preLoaderRoute: typeof CompanionKioskRouteImport
-      parentRoute: typeof CompanionRoute
     }
     '/admin/students': {
       id: '/admin/students'
@@ -254,26 +195,12 @@ const AdminRouteChildren: AdminRouteChildren = {
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
-interface CompanionRouteChildren {
-  CompanionKioskRoute: typeof CompanionKioskRoute
-}
-
-const CompanionRouteChildren: CompanionRouteChildren = {
-  CompanionKioskRoute: CompanionKioskRoute,
-}
-
-const CompanionRouteWithChildren = CompanionRoute._addFileChildren(
-  CompanionRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
-  CompanionRoute: CompanionRouteWithChildren,
-  DashboardRoute: DashboardRoute,
+  CompanionRoute: CompanionRoute,
   LoginRoute: LoginRoute,
   ProfileRoute: ProfileRoute,
-  StageRoute: StageRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

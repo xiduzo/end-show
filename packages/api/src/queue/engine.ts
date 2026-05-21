@@ -18,6 +18,7 @@ export type QueueSnapshot = {
   stageCode: string | null;
   kiosk: string[];
   mobile: string[];
+  next: string | null;
 };
 
 export type StageSnapshot = {
@@ -66,8 +67,24 @@ function getChannel(stageCode: string | null): ChannelState {
   return ch;
 }
 
+function peekNext(ch: ChannelState): string | null {
+  if (ch.kiosk.length > 0) return ch.kiosk[0] ?? null;
+  if (ch.mobile.length > 0) return ch.mobile[0] ?? null;
+  if (ch.rotationOrder.length > 0) {
+    const idx =
+      ch.rotationCursor < ch.rotationOrder.length ? ch.rotationCursor : 0;
+    return ch.rotationOrder[idx] ?? null;
+  }
+  return null;
+}
+
 function snapshotQueue(ch: ChannelState): QueueSnapshot {
-  return { stageCode: ch.stageCode, kiosk: [...ch.kiosk], mobile: [...ch.mobile] };
+  return {
+    stageCode: ch.stageCode,
+    kiosk: [...ch.kiosk],
+    mobile: [...ch.mobile],
+    next: peekNext(ch),
+  };
 }
 
 function snapshotStage(ch: ChannelState): StageSnapshot {

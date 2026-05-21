@@ -11,7 +11,7 @@ export const Route = createFileRoute("/admin/students")({
     const session = await authClient.getSession();
     if (!session.data) throw redirect({ to: "/login" });
     const role = (session.data.user as { role?: string }).role;
-    if (role !== "staff") throw redirect({ to: "/dashboard" });
+    if (role !== "staff") throw redirect({ to: "/" });
     return { session };
   },
 });

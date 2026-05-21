@@ -16,6 +16,8 @@ export type StudentSummary = {
   introduction: string;
   link: string;
   portraitUrl: string | null;
+  workMediaUrl: string | null;
+  workMediaKind: "work-image" | "work-video" | null;
   competencies: string[];
 };
 
@@ -32,7 +34,7 @@ export type MyProfile = {
   workMediaKind: "work-image" | "work-video" | null;
 };
 
-function isComplete(s: Omit<StudentSummary, "portraitUrl">): boolean {
+function isComplete(s: Omit<StudentSummary, "portraitUrl" | "workMediaUrl" | "workMediaKind">): boolean {
   return Boolean(
     s.displayName &&
       s.pronouns &&
@@ -63,28 +65,31 @@ export const studentRouter = router({
       list.push(c.tag);
       byStudent.set(c.studentUserId, list);
     }
-    const portraitIds = rows
-      .map((r) => r.portraitAssetId)
+    const assetIds = rows
+      .flatMap((r) => [r.portraitAssetId, r.workMediaAssetId])
       .filter((id): id is string => id !== null && id !== undefined);
-    const portraitRows =
-      portraitIds.length > 0
-        ? await db.select().from(asset).where(inArray(asset.id, portraitIds))
+    const assetRows =
+      assetIds.length > 0
+        ? await db.select().from(asset).where(inArray(asset.id, assetIds))
         : [];
-    const portraitByAssetId = new Map(portraitRows.map((a) => [a.id, a.r2Key]));
+    const assetById = new Map(assetRows.map((a) => [a.id, a]));
 
-    const all: StudentSummary[] = rows.map((r) => ({
-      userId: r.userId,
-      displayName: r.displayName,
-      pronouns: r.pronouns,
-      introduction: r.introduction,
-      link: r.link,
-      portraitUrl: r.portraitAssetId
-        ? (portraitByAssetId.get(r.portraitAssetId)
-            ? publicUrlFor(portraitByAssetId.get(r.portraitAssetId)!)
-            : null)
-        : null,
-      competencies: byStudent.get(r.userId) ?? [],
-    }));
+    const all: StudentSummary[] = rows.map((r) => {
+      const portrait = r.portraitAssetId ? assetById.get(r.portraitAssetId) : undefined;
+      const work = r.workMediaAssetId ? assetById.get(r.workMediaAssetId) : undefined;
+      return {
+        userId: r.userId,
+        displayName: r.displayName,
+        pronouns: r.pronouns,
+        introduction: r.introduction,
+        link: r.link,
+        portraitUrl: portrait ? publicUrlFor(portrait.r2Key) : null,
+        workMediaUrl: work ? publicUrlFor(work.r2Key) : null,
+        workMediaKind:
+          work?.kind === "work-image" || work?.kind === "work-video" ? work.kind : null,
+        competencies: byStudent.get(r.userId) ?? [],
+      };
+    });
     return all.filter(isComplete);
   }),
 

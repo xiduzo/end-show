@@ -26,6 +26,7 @@
     "better-auth": "catalog:",
     "dotenv": "catalog:",
     "lucide-react": "^1.8.0",
+    "motion": "^12.40.0",
     "next-themes": "catalog:",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.5",

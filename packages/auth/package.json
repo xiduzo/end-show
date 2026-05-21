@@ -1,0 +1,24 @@
+{
+  "name": "@end-show/auth",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@end-show/db": "workspace:*",
+    "@end-show/env": "workspace:*",
+    "better-auth": "catalog:",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@end-show/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

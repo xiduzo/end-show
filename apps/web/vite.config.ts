@@ -7,6 +7,7 @@ import { VitePWA } from "vite-plugin-pwa";
 export default defineConfig({
   server: {
     port: 3001,
+    host: true,
   },
   resolve: {
     tsconfigPaths: true,
@@ -25,6 +26,9 @@ export default defineConfig({
         short_name: "end-show",
         description: "end-show - PWA Application",
         theme_color: "#0c0c0c",
+        start_url: "/companion",
+        scope: "/",
+        display: "standalone",
       },
       pwaAssets: { disabled: false, config: true },
       devOptions: { enabled: true },
@@ -46,8 +50,7 @@ export default defineConfig({
           {
             urlPattern: ({ request, url }) =>
               request.destination === "video" ||
-              /\.(mp4|webm|mov|m4v)$/i.test(url.pathname) ||
-              url.hostname.endsWith("pexels.com"),
+              /\.(mp4|webm|mov|m4v)$/i.test(url.pathname),
             handler: "CacheFirst",
             options: {
               cacheName: "student-videos",
@@ -55,7 +58,7 @@ export default defineConfig({
                 maxEntries: 50,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
               },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
               rangeRequests: true,
             },
           },

@@ -58,7 +58,6 @@ export class R2AssetStore implements AssetStore {
       Bucket: this.bucket(),
       Key: input.key,
       ContentType: input.mimeType,
-      ContentLength: input.bytes,
     });
     const uploadUrl = await getSignedUrl(this.client(), command, { expiresIn });
     return { uploadUrl, expiresIn };
@@ -96,6 +95,8 @@ export class R2AssetStore implements AssetStore {
         accessKeyId: env.R2_ACCESS_KEY_ID!,
         secretAccessKey: env.R2_SECRET_ACCESS_KEY!,
       },
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
     });
     return this.cached;
   }

@@ -4,11 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite dev",
+    "dev": "vite dev --host",
     "build": "vite build",
     "serve": "vite preview",
     "start": "vite",
     "check-types": "vite build && tsc --noEmit",
+    "lint": "eslint src",
+    "lint:boundaries": "eslint src --rule 'boundaries/element-types: warn' --rule 'boundaries/entry-point: warn'",
     "generate-pwa-assets": "pwa-assets-generator"
   },
   "dependencies": {
@@ -42,6 +44,7 @@
   },
   "devDependencies": {
     "@end-show/config": "workspace:*",
+    "@eslint/js": "^10.0.1",
     "@tanstack/react-query-devtools": "^5.91.1",
     "@tanstack/react-router-devtools": "^1.166.13",
     "@tanstack/router-plugin": "^1.167.22",
@@ -51,9 +54,15 @@
     "@types/three": "^0.184.1",
     "@vite-pwa/assets-generator": "^1.0.2",
     "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^10.4.0",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-boundaries": "^6.0.2",
+    "eslint-plugin-import": "^2.32.0",
+    "globals": "^17.6.0",
     "postcss": "^8.5.10",
     "tailwindcss": "^4.2.2",
     "typescript": "catalog:",
+    "typescript-eslint": "^8.59.4",
     "vite": "^8.0.8"
   }
 }

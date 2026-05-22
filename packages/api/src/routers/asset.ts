@@ -26,6 +26,18 @@ function maxBytesFor(kind: "portrait" | "work-image" | "work-video"): number {
   return MAX_WORK_VIDEO_BYTES;
 }
 
+function formatMB(bytes: number): string {
+  const mb = bytes / (1024 * 1024);
+  const rounded = mb >= 10 ? Math.round(mb) : Math.round(mb * 10) / 10;
+  return `${rounded} MB`;
+}
+
+function kindLabel(kind: "portrait" | "work-image" | "work-video"): string {
+  if (kind === "portrait") return "portrait";
+  if (kind === "work-image") return "work image";
+  return "work video";
+}
+
 export const assetRouter = router({
   requestUpload: protectedProcedure
     .input(
@@ -47,14 +59,14 @@ export const assetRouter = router({
       if (!allowed.includes(input.mimeType)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: `mime ${input.mimeType} not allowed for ${input.kind}`,
+          message: `${input.mimeType} isn't supported for your ${kindLabel(input.kind)}. Try a different file type.`,
         });
       }
       const max = maxBytesFor(input.kind);
       if (input.bytes > max) {
         throw new TRPCError({
           code: "PAYLOAD_TOO_LARGE",
-          message: `max ${max} bytes for ${input.kind}, got ${input.bytes}`,
+          message: `Your ${kindLabel(input.kind)} is ${formatMB(input.bytes)} — max is ${formatMB(max)}.`,
         });
       }
 
@@ -62,15 +74,31 @@ export const assetRouter = router({
       // Ensure student row exists (insert blank if missing)
       const existing = await db.select().from(student).where(eq(student.userId, userId));
       if (existing.length === 0) {
-        await db.insert(student).values({ userId, isPublished: false });
+        await db.insert(student).values({ userId });
+      }
+
+      // This upload will replace whatever currently fills the same slot,
+      // so credit those bytes back when checking the budget.
+      const priorAssetId =
+        input.kind === "portrait"
+          ? existing[0]?.portraitAssetId ?? null
+          : existing[0]?.workMediaAssetId ?? null;
+      let replacedBytes = 0;
+      if (priorAssetId) {
+        const priorRows = await db
+          .select({ bytes: asset.bytes })
+          .from(asset)
+          .where(eq(asset.id, priorAssetId));
+        replacedBytes = priorRows[0]?.bytes ?? 0;
       }
 
       // Hard block on budget exceed.
       const budget = await computeBudget(userId);
-      if (budget.remainingBytes < input.bytes) {
+      const effectiveRemaining = budget.remainingBytes + replacedBytes;
+      if (effectiveRemaining < input.bytes) {
         throw new TRPCError({
           code: "PAYLOAD_TOO_LARGE",
-          message: `Over budget. ${budget.remainingBytes} bytes left, need ${input.bytes}.`,
+          message: `Not enough storage. You have ${formatMB(effectiveRemaining)} free, this upload needs ${formatMB(input.bytes)}.`,
         });
       }
 

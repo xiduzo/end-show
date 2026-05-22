@@ -14,7 +14,6 @@ export const student = sqliteTable("student", {
   stageColor: text("stage_color"),
   portraitAssetId: text("portrait_asset_id"),
   workMediaAssetId: text("work_media_asset_id"),
-  isPublished: integer("is_published", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),

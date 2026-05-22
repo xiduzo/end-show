@@ -1,42 +1,62 @@
-import { getAppearanceLog } from "./appearanceLog";
-import { checkExposureCap } from "./exposureCap";
+import { Queuer } from "@tanstack/pacer";
+
+import { type AppearanceSource, getAppearanceLog } from "./appearanceLog";
 
 type Tier = "kiosk" | "mobile";
-type Source = Tier | "rotation";
+type QueueSource = "kiosk" | "mobile" | "rotation" | "resume";
+
+type QueueItem = {
+  studentUserId: string;
+  source: QueueSource;
+  appearanceSource: AppearanceSource;
+  priority: number;
+};
 
 type CurrentEntry = {
   studentUserId: string;
   startedAt: number;
-  source: Source;
+  source: AppearanceSource;
   appearanceId: string;
 };
 
 export type QueueSnapshot = {
   stageCode: string | null;
-  kiosk: string[];
-  mobile: string[];
+  items: Array<{ studentUserId: string; source: QueueSource }>;
   next: string | null;
 };
 
 export type StageSnapshot = {
   stageCode: string | null;
-  current: { studentUserId: string; startedAt: number; source: Source } | null;
+  current: {
+    studentUserId: string;
+    startedAt: number;
+    source: AppearanceSource;
+  } | null;
   dwellMs: number;
 };
 
 type ChannelState = {
   stageCode: string | null;
-  kiosk: string[];
-  mobile: string[];
   current: CurrentEntry | null;
-  rotationOrder: string[];
-  rotationCursor: number;
+  queuer: Queuer<QueueItem>;
+  resumeBump: number;
   timer: ReturnType<typeof setTimeout> | null;
   queueListeners: Set<(s: QueueSnapshot) => void>;
   stageListeners: Set<(s: StageSnapshot) => void>;
 };
 
 const DWELL_MS = Number(process.env.DWELL_MS ?? 30000);
+const MIN_QUEUE = 3;
+/** Random pick happens within the N most-overdue students. Bigger = feels
+ *  more random, smaller = stricter fairness. 1 = pure least-recently-seen. */
+const ROTATION_WINDOW = 12;
+
+const PRIORITY = {
+  resume: 400,
+  kiosk: 300,
+  mobile: 200,
+  rotation: 100,
+} as const;
 
 const channels = new Map<string, ChannelState>();
 
@@ -44,17 +64,20 @@ function keyFor(stageCode: string | null): string {
   return stageCode ?? "";
 }
 
+function noop(): void {}
+
 function getChannel(stageCode: string | null): ChannelState {
   const key = keyFor(stageCode);
   let ch = channels.get(key);
   if (!ch) {
     ch = {
       stageCode,
-      kiosk: [],
-      mobile: [],
       current: null,
-      rotationOrder: [],
-      rotationCursor: 0,
+      queuer: new Queuer<QueueItem>(noop, {
+        started: false,
+        getPriority: (i) => i.priority,
+      }),
+      resumeBump: 0,
       timer: null,
       queueListeners: new Set(),
       stageListeners: new Set(),
@@ -64,29 +87,25 @@ function getChannel(stageCode: string | null): ChannelState {
   return ch;
 }
 
-function peekNext(ch: ChannelState): string | null {
-  if (ch.kiosk.length > 0) return ch.kiosk[0] ?? null;
-  if (ch.mobile.length > 0) return ch.mobile[0] ?? null;
-  if (ch.rotationOrder.length > 0) {
-    const idx =
-      ch.rotationCursor < ch.rotationOrder.length ? ch.rotationCursor : 0;
-    return ch.rotationOrder[idx] ?? null;
-  }
-  return null;
-}
-
 function snapshotQueue(ch: ChannelState): QueueSnapshot {
+  const items = ch.queuer.peekAllItems().map((i) => ({
+    studentUserId: i.studentUserId,
+    source: i.source,
+  }));
   return {
     stageCode: ch.stageCode,
-    kiosk: [...ch.kiosk],
-    mobile: [...ch.mobile],
-    next: peekNext(ch),
+    items,
+    next: items[0]?.studentUserId ?? null,
   };
 }
 
 function snapshotStage(ch: ChannelState): StageSnapshot {
   const cur = ch.current
-    ? { studentUserId: ch.current.studentUserId, startedAt: ch.current.startedAt, source: ch.current.source }
+    ? {
+        studentUserId: ch.current.studentUserId,
+        startedAt: ch.current.startedAt,
+        source: ch.current.source,
+      }
     : null;
   return { stageCode: ch.stageCode, current: cur, dwellMs: DWELL_MS };
 }
@@ -108,52 +127,51 @@ export function setRotationProvider(fn: RotationProvider): void {
   rotationProvider = fn;
 }
 
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    const tmp = a[i]!;
-    a[i] = a[j]!;
-    a[j] = tmp;
-  }
-  return a;
+function queuedIds(ch: ChannelState): Set<string> {
+  return new Set(ch.queuer.peekAllItems().map((i) => i.studentUserId));
 }
 
-async function pickRotation(ch: ChannelState): Promise<string | null> {
+function enqueueUnique(ch: ChannelState, item: QueueItem): void {
+  const all = ch.queuer.peekAllItems();
+  if (all.some((i) => i.studentUserId === item.studentUserId)) {
+    ch.queuer.clear();
+    for (const i of all) {
+      if (i.studentUserId !== item.studentUserId) ch.queuer.addItem(i);
+    }
+  }
+  ch.queuer.addItem(item);
+}
+
+async function nextRotationCandidate(ch: ChannelState): Promise<string | null> {
   const eligible = await rotationProvider();
   if (eligible.length === 0) return null;
-  if (ch.rotationCursor >= ch.rotationOrder.length || ch.rotationOrder.length === 0) {
-    ch.rotationOrder = shuffle(eligible);
-    ch.rotationCursor = 0;
-  }
-  const pick = ch.rotationOrder[ch.rotationCursor] ?? null;
-  ch.rotationCursor += 1;
-  return pick;
+  const exclude = queuedIds(ch);
+  if (ch.current) exclude.add(ch.current.studentUserId);
+
+  const pool = eligible.filter((id) => !exclude.has(id));
+  if (pool.length === 0) return null;
+
+  // Sort by least-recently-seen (never-seen = oldest), then pick randomly
+  // within the top ROTATION_WINDOW. Fair-bounded but not robotic.
+  const lastSeen = await getAppearanceLog().lastStartedAtFor(pool);
+  const scored = pool
+    .map((id) => ({ id, last: lastSeen.get(id) ?? 0 }))
+    .sort((a, b) => a.last - b.last);
+
+  const window = Math.min(scored.length, ROTATION_WINDOW);
+  return scored[Math.floor(Math.random() * window)]!.id;
 }
 
-async function pickNextEligible(
-  ch: ChannelState,
-): Promise<{ studentUserId: string; source: Source } | null> {
-  const seenInRotation = new Set<string>();
-  while (true) {
-    let candidate: { studentUserId: string; source: Source } | null = null;
-    if (ch.kiosk.length > 0) {
-      candidate = { studentUserId: ch.kiosk.shift()!, source: "kiosk" };
-    } else if (ch.mobile.length > 0) {
-      candidate = { studentUserId: ch.mobile.shift()!, source: "mobile" };
-    } else {
-      const rot = await pickRotation(ch);
-      if (rot) {
-        if (seenInRotation.has(rot)) return null; // walked full cycle, all over cap
-        seenInRotation.add(rot);
-        candidate = { studentUserId: rot, source: "rotation" };
-      }
-    }
-    if (!candidate) return null;
-
-    const status = await checkExposureCap(candidate.studentUserId);
-    if (!status.overCap) return candidate;
-    // silently skip; loop
+async function topUp(ch: ChannelState): Promise<void> {
+  while (ch.queuer.peekAllItems().length < MIN_QUEUE) {
+    const candidate = await nextRotationCandidate(ch);
+    if (!candidate) return;
+    enqueueUnique(ch, {
+      studentUserId: candidate,
+      source: "rotation",
+      appearanceSource: "rotation",
+      priority: PRIORITY.rotation,
+    });
   }
 }
 
@@ -162,12 +180,13 @@ async function advance(ch: ChannelState): Promise<void> {
 
   if (ch.current) {
     await log.end(ch.current.appearanceId);
+    ch.current = null;
   }
 
-  const next = await pickNextEligible(ch);
+  await topUp(ch);
+  const next = ch.queuer.getNextItem() ?? null;
 
   if (!next) {
-    ch.current = null;
     if (ch.timer) {
       clearTimeout(ch.timer);
       ch.timer = null;
@@ -180,15 +199,17 @@ async function advance(ch: ChannelState): Promise<void> {
   const { id, startedAtMs } = await log.start({
     studentUserId: next.studentUserId,
     stageCode: ch.stageCode,
-    source: next.source,
+    source: next.appearanceSource,
   });
 
   ch.current = {
     studentUserId: next.studentUserId,
     startedAt: startedAtMs,
-    source: next.source,
+    source: next.appearanceSource,
     appearanceId: id,
   };
+
+  await topUp(ch);
   emitStage(ch);
   emitQueue(ch);
 
@@ -199,9 +220,8 @@ async function advance(ch: ChannelState): Promise<void> {
 }
 
 export type PushResult =
-  | { ok: true }
-  | { ok: false; reason: "currently-on-stage" | "already-queued" }
-  | { ok: false; reason: "exposure-cap"; retryAfterMs: number };
+  | { ok: true; preempted: boolean; extended?: boolean }
+  | { ok: false; reason: "currently-on-stage" };
 
 export async function pushToQueue(opts: {
   stageCode: string | null;
@@ -210,24 +230,58 @@ export async function pushToQueue(opts: {
 }): Promise<PushResult> {
   const ch = getChannel(opts.stageCode);
   if (ch.current?.studentUserId === opts.studentUserId) {
-    return { ok: false, reason: "currently-on-stage" };
-  }
-  if (ch.kiosk.includes(opts.studentUserId) || ch.mobile.includes(opts.studentUserId)) {
-    return { ok: false, reason: "already-queued" };
-  }
-
-  const status = await checkExposureCap(opts.studentUserId);
-  if (status.overCap) {
-    return { ok: false, reason: "exposure-cap", retryAfterMs: status.retryAfterMs };
+    ch.current.startedAt = Date.now();
+    if (ch.timer) clearTimeout(ch.timer);
+    ch.timer = setTimeout(() => {
+      void advance(ch);
+    }, DWELL_MS);
+    emitStage(ch);
+    return { ok: true, preempted: false, extended: true };
   }
 
-  const tierQueue = opts.tier === "kiosk" ? ch.kiosk : ch.mobile;
-  tierQueue.push(opts.studentUserId);
+  // Preempt path — companion send while someone is on stage.
+  if (ch.current) {
+    if (ch.timer) {
+      clearTimeout(ch.timer);
+      ch.timer = null;
+    }
+    const log = getAppearanceLog();
+    const old = ch.current;
+    ch.current = null;
+    await log.end(old.appearanceId);
+
+    ch.resumeBump += 1;
+    enqueueUnique(ch, {
+      studentUserId: old.studentUserId,
+      source: "resume",
+      appearanceSource: old.source,
+      priority: PRIORITY.resume + ch.resumeBump,
+    });
+    enqueueUnique(ch, {
+      studentUserId: opts.studentUserId,
+      source: opts.tier,
+      appearanceSource: opts.tier,
+      // bump above the just-resumed student so this one is dequeued next
+      priority: PRIORITY.resume + ch.resumeBump + 1,
+    });
+
+    await advance(ch);
+    return { ok: true, preempted: true };
+  }
+
+  // No one on stage — add (or silently bump dup) and kick advance.
+  enqueueUnique(ch, {
+    studentUserId: opts.studentUserId,
+    source: opts.tier,
+    appearanceSource: opts.tier,
+    priority: opts.tier === "kiosk" ? PRIORITY.kiosk : PRIORITY.mobile,
+  });
+  await topUp(ch);
   emitQueue(ch);
-  if (!ch.current && ch.stageListeners.size > 0) {
+  if (ch.stageListeners.size > 0) {
     void advance(ch);
   }
-  return { ok: true };
+  return { ok: true, preempted: false };
 }
 
 export function subscribeQueue(

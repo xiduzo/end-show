@@ -8,8 +8,8 @@ import {
 } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 
-import { ThemeProvider } from "@/components/theme-provider";
-import type { trpc } from "@/utils/trpc";
+import { ThemeProvider } from "@/shell";
+import type { trpc } from "@/lib/trpc";
 
 import "../index.css";
 

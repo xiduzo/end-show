@@ -1,7 +1,8 @@
 import { db } from "@end-show/db";
-import { asset } from "@end-show/db/schema/asset";
+import { asset, budgetLoan } from "@end-show/db/schema/asset";
 import { user } from "@end-show/db/schema/auth";
 import { student, studentCompetency } from "@end-show/db/schema/student";
+import { env } from "@end-show/env/server";
 import { TRPCError } from "@trpc/server";
 import { eq, inArray, sum } from "drizzle-orm";
 import { z } from "zod";
@@ -12,13 +13,25 @@ import {
 } from "../budget";
 import { getAssetStore } from "../assetStore";
 import { router, staffProcedure } from "../index";
+import type { StageColor } from "./student";
+
+const draftLink = z
+  .string()
+  .trim()
+  .max(300)
+  .refine((v) => v === "" || z.string().url().safeParse(v).success, {
+    message: "Invalid URL",
+  });
+
+const stageColorSchema = z.enum(["slime", "crayon", "bubblegum"]);
 
 const profileInput = z.object({
-  displayName: z.string().trim().min(1).max(80),
-  pronouns: z.string().trim().min(1).max(40),
-  introduction: z.string().trim().min(1).max(500),
-  link: z.string().trim().url().max(300),
-  competencies: z.array(z.string().trim().min(1).max(40)).min(1).max(8),
+  displayName: z.string().trim().max(80),
+  pronouns: z.string().trim().max(40),
+  introduction: z.string().trim().max(80),
+  link: draftLink,
+  competencies: z.array(z.string().trim().min(1).max(40)).max(5),
+  stageColor: stageColorSchema.nullable(),
 });
 
 export const adminRouter = router({
@@ -36,7 +49,6 @@ export const adminRouter = router({
       name: string;
       email: string;
       usedBytes: number;
-      isPublished: boolean;
     }> = [];
 
     for (const s of students) {
@@ -45,16 +57,11 @@ export const adminRouter = router({
         .from(asset)
         .where(eq(asset.studentUserId, s.id));
       const used = Number(usedRow[0]?.total ?? 0);
-      const studentRow = await db
-        .select()
-        .from(student)
-        .where(eq(student.userId, s.id));
       perStudent.push({
         userId: s.id,
         name: s.name,
         email: s.email,
         usedBytes: used,
-        isPublished: studentRow[0]?.isPublished ?? false,
       });
     }
 
@@ -70,21 +77,97 @@ export const adminRouter = router({
 
   listStudents: staffProcedure.query(async () => {
     const users = await db
-      .select({ id: user.id, name: user.name, email: user.email })
+      .select({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.createdAt,
+      })
       .from(user)
       .where(eq(user.role, "student"));
     const studentRows = await db.select().from(student);
     const byId = new Map(studentRows.map((s) => [s.userId, s]));
+    const compRows = await db.select().from(studentCompetency);
+    const compsByUser = new Map<string, string[]>();
+    for (const c of compRows) {
+      const arr = compsByUser.get(c.studentUserId) ?? [];
+      arr.push(c.tag);
+      compsByUser.set(c.studentUserId, arr);
+    }
+    const assetRows = await db
+      .select({
+        studentUserId: asset.studentUserId,
+        bytes: asset.bytes,
+        kind: asset.kind,
+      })
+      .from(asset);
+    const usedByUser = new Map<string, number>();
+    const kindsByUser = new Map<string, Set<string>>();
+    for (const a of assetRows) {
+      usedByUser.set(
+        a.studentUserId,
+        (usedByUser.get(a.studentUserId) ?? 0) + a.bytes,
+      );
+      const set = kindsByUser.get(a.studentUserId) ?? new Set<string>();
+      set.add(a.kind);
+      kindsByUser.set(a.studentUserId, set);
+    }
+    const loanRows = await db
+      .select()
+      .from(budgetLoan)
+      .where(eq(budgetLoan.status, "accepted"));
+    const inByUser = new Map<string, number>();
+    const outByUser = new Map<string, number>();
+    for (const t of loanRows) {
+      inByUser.set(t.toUserId, (inByUser.get(t.toUserId) ?? 0) + t.bytes);
+      outByUser.set(
+        t.fromUserId,
+        (outByUser.get(t.fromUserId) ?? 0) + t.bytes,
+      );
+    }
+    const defaultBytes = env.BUDGET_DEFAULT_BYTES;
+
     return users
       .map((u) => {
         const s = byId.get(u.id);
+        const used = usedByUser.get(u.id) ?? 0;
+        const budget =
+          defaultBytes +
+          (inByUser.get(u.id) ?? 0) -
+          (outByUser.get(u.id) ?? 0);
+        const kinds = kindsByUser.get(u.id);
+        const workMediaKind: "work-image" | "work-video" | null =
+          kinds?.has("work-video")
+            ? "work-video"
+            : kinds?.has("work-image")
+              ? "work-image"
+              : null;
+        const updatedAt = s?.updatedAt ?? u.createdAt;
+        const comps = compsByUser.get(u.id) ?? [];
+        const isComplete = Boolean(
+          s &&
+            s.displayName &&
+            s.pronouns &&
+            s.introduction &&
+            s.link &&
+            comps.length > 0,
+        );
         return {
           userId: u.id,
           name: u.name,
           email: u.email,
           hasProfile: Boolean(s),
-          isPublished: s?.isPublished ?? false,
+          isComplete,
           displayName: s?.displayName ?? "",
+          pronouns: s?.pronouns ?? "",
+          link: s?.link ?? "",
+          competencies: comps,
+          workMediaKind,
+          hasMedia: Boolean(kinds && kinds.size > 0),
+          usedBytes: used,
+          budgetBytes: budget,
+          overBudget: used > budget,
+          updatedAt: updatedAt instanceof Date ? updatedAt.getTime() : Date.now(),
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -125,8 +208,8 @@ export const adminRouter = router({
         pronouns: s?.pronouns ?? "",
         introduction: s?.introduction ?? "",
         link: s?.link ?? "",
-        isPublished: s?.isPublished ?? false,
         competencies: comps.map((c) => c.tag),
+        stageColor: (s?.stageColor as StageColor | null) ?? null,
         portraitUrl: portrait ? getAssetStore().publicUrl(portrait.r2Key) : null,
         workMediaUrl: work ? getAssetStore().publicUrl(work.r2Key) : null,
         workMediaKind:
@@ -153,7 +236,7 @@ export const adminRouter = router({
           pronouns: rest.pronouns,
           introduction: rest.introduction,
           link: rest.link,
-          isPublished: false,
+          stageColor: rest.stageColor,
         });
       } else {
         await db
@@ -163,6 +246,7 @@ export const adminRouter = router({
             pronouns: rest.pronouns,
             introduction: rest.introduction,
             link: rest.link,
+            stageColor: rest.stageColor,
             updatedAt: new Date(),
           })
           .where(eq(student.userId, userId));
@@ -178,20 +262,4 @@ export const adminRouter = router({
       return { ok: true as const };
     }),
 
-  setStudentPublished: staffProcedure
-    .input(z.object({ userId: z.string().min(1), isPublished: z.boolean() }))
-    .mutation(async ({ input }) => {
-      const rows = await db.select().from(student).where(eq(student.userId, input.userId));
-      if (rows.length === 0) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "Profile not created yet",
-        });
-      }
-      await db
-        .update(student)
-        .set({ isPublished: input.isPublished, updatedAt: new Date() })
-        .where(eq(student.userId, input.userId));
-      return { ok: true as const };
-    }),
 });

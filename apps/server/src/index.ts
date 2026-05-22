@@ -5,7 +5,6 @@ import { auth } from "@end-show/auth";
 import { db } from "@end-show/db";
 import { student } from "@end-show/db/schema/student";
 import { env } from "@end-show/env/server";
-import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { logger } from "hono/logger";
 import {
@@ -29,10 +28,7 @@ const port = Number(process.env.PORT ?? 3000);
 await seedStudents();
 
 setRotationProvider(async () => {
-  const rows = await db
-    .select({ id: student.userId })
-    .from(student)
-    .where(eq(student.isPublished, true));
+  const rows = await db.select({ id: student.userId }).from(student);
   return rows.map((r) => r.id);
 });
 
@@ -55,10 +51,10 @@ const websocket = createBunWSHandler({
   createContext: trpcCreateContext,
 });
 
-const ALLOWED_ORIGIN = env.CORS_ORIGIN;
+const ALLOWED_ORIGINS = env.CORS_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean);
 
 function corsHeaders(origin: string | null): Record<string, string> {
-  const allow = origin && origin === ALLOWED_ORIGIN ? origin : ALLOWED_ORIGIN;
+  const allow = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Credentials": "true",

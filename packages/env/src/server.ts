@@ -7,8 +7,21 @@ export const env = createEnv({
     DATABASE_URL: z.string().min(1),
     BETTER_AUTH_SECRET: z.string().min(32),
     BETTER_AUTH_URL: z.url(),
-    CORS_ORIGIN: z.url(),
-    NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+    CORS_ORIGIN: z
+      .string()
+      .min(1)
+      .refine(
+        (v) =>
+          v
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .every((u) => z.url().safeParse(u).success),
+        { message: "CORS_ORIGIN must be a comma-separated list of URLs" },
+      ),
+    NODE_ENV: z
+      .enum(["development", "production", "test"])
+      .default("development"),
     R2_ACCOUNT_ID: z.string().min(1).optional(),
     R2_BUCKET: z.string().min(1).optional(),
     R2_ACCESS_KEY_ID: z.string().min(1).optional(),
@@ -18,7 +31,7 @@ export const env = createEnv({
       .number()
       .int()
       .positive()
-      .default(200 * 1024 * 1024),
+      .default(30 * 1024 * 1024),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

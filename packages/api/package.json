@@ -16,6 +16,7 @@
     "@end-show/auth": "workspace:*",
     "@end-show/db": "workspace:*",
     "@end-show/env": "workspace:*",
+    "@tanstack/pacer": "^0.21.1",
     "@trpc/client": "catalog:",
     "@trpc/server": "catalog:",
     "dotenv": "catalog:",

@@ -187,9 +187,11 @@
     }
     body {
         @apply font-sans bg-background text-foreground;
+        overscroll-behavior: none;
     }
     html {
         @apply font-sans;
+        overscroll-behavior: none;
     }
 }
 

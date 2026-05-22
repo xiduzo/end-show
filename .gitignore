@@ -1,5 +1,6 @@
 # Dependencies
 node_modules
+node-compile-cache
 .pnp
 .pnp.js
 
@@ -49,3 +50,6 @@ coverage
 .cache
 tmp
 temp
+
+# Workbox build artifacts (hash-named dirs)
+[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]/

@@ -25,8 +25,8 @@ export const asset = sqliteTable(
   (table) => [index("asset_student_idx").on(table.studentUserId)],
 );
 
-export const budgetTransfer = sqliteTable(
-  "budget_transfer",
+export const budgetLoan = sqliteTable(
+  "budget_loan",
   {
     id: text("id").primaryKey(),
     fromUserId: text("from_user_id")
@@ -36,13 +36,22 @@ export const budgetTransfer = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     bytes: integer("bytes").notNull(),
+    status: text("status", {
+      enum: ["pending", "accepted", "declined", "cancelled", "returned"],
+    })
+      .notNull()
+      .default("pending"),
+    reason: text("reason").notNull().default(""),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),
+    respondedAt: integer("responded_at", { mode: "timestamp_ms" }),
+    returnedAt: integer("returned_at", { mode: "timestamp_ms" }),
   },
   (table) => [
-    index("budget_transfer_from_idx").on(table.fromUserId),
-    index("budget_transfer_to_idx").on(table.toUserId),
+    index("budget_loan_from_idx").on(table.fromUserId),
+    index("budget_loan_to_idx").on(table.toUserId),
+    index("budget_loan_status_idx").on(table.status),
   ],
 );
 
@@ -50,7 +59,7 @@ export const assetRelations = relations(asset, ({ one }) => ({
   student: one(student, { fields: [asset.studentUserId], references: [student.userId] }),
 }));
 
-export const budgetTransferRelations = relations(budgetTransfer, ({ one }) => ({
-  from: one(user, { fields: [budgetTransfer.fromUserId], references: [user.id], relationName: "transfersGiven" }),
-  to: one(user, { fields: [budgetTransfer.toUserId], references: [user.id], relationName: "transfersReceived" }),
+export const budgetLoanRelations = relations(budgetLoan, ({ one }) => ({
+  from: one(user, { fields: [budgetLoan.fromUserId], references: [user.id], relationName: "loansGiven" }),
+  to: one(user, { fields: [budgetLoan.toUserId], references: [user.id], relationName: "loansReceived" }),
 }));

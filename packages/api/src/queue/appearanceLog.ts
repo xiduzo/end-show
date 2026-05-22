@@ -1,6 +1,6 @@
 import { db } from "@end-show/db";
 import { appearance } from "@end-show/db/schema/appearance";
-import { and, eq, gte, isNull, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, max, or } from "drizzle-orm";
 
 export type AppearanceSource = "kiosk" | "mobile" | "rotation";
 
@@ -28,6 +28,8 @@ export interface AppearanceLog {
     studentUserId: string,
     sinceMs: number,
   ): Promise<AppearanceRecord[]>;
+  /** Map of userId → last startedAt (ms). Missing entries = never appeared. */
+  lastStartedAtFor(studentUserIds: string[]): Promise<Map<string, number>>;
 }
 
 export class DrizzleAppearanceLog implements AppearanceLog {
@@ -76,6 +78,25 @@ export class DrizzleAppearanceLog implements AppearanceLog {
       endedAtMs: r.endedAt?.getTime() ?? null,
     }));
   }
+
+  async lastStartedAtFor(
+    studentUserIds: string[],
+  ): Promise<Map<string, number>> {
+    const out = new Map<string, number>();
+    if (studentUserIds.length === 0) return out;
+    const rows = await db
+      .select({
+        studentUserId: appearance.studentUserId,
+        last: max(appearance.startedAt),
+      })
+      .from(appearance)
+      .where(inArray(appearance.studentUserId, studentUserIds))
+      .groupBy(appearance.studentUserId);
+    for (const r of rows) {
+      if (r.last) out.set(r.studentUserId, r.last.getTime());
+    }
+    return out;
+  }
 }
 
 export class InMemoryAppearanceLog implements AppearanceLog {
@@ -116,6 +137,19 @@ export class InMemoryAppearanceLog implements AppearanceLog {
         r.studentUserId === studentUserId &&
         (r.endedAtMs === null || r.endedAtMs >= sinceMs),
     );
+  }
+
+  async lastStartedAtFor(
+    studentUserIds: string[],
+  ): Promise<Map<string, number>> {
+    const want = new Set(studentUserIds);
+    const out = new Map<string, number>();
+    for (const r of this.rows) {
+      if (!want.has(r.studentUserId)) continue;
+      const prev = out.get(r.studentUserId) ?? 0;
+      if (r.startedAtMs > prev) out.set(r.studentUserId, r.startedAtMs);
+    }
+    return out;
   }
 
   reset(): void {

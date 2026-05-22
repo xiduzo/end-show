@@ -2,7 +2,6 @@ import { db } from "@end-show/db";
 import { asset } from "@end-show/db/schema/asset";
 import { user } from "@end-show/db/schema/auth";
 import { student, studentCompetency } from "@end-show/db/schema/student";
-import { TRPCError } from "@trpc/server";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 
@@ -31,7 +30,6 @@ export type MyProfile = {
   introduction: string;
   link: string;
   stageColor: StageColor | null;
-  isPublished: boolean;
   competencies: string[];
   portraitUrl: string | null;
   workMediaUrl: string | null;
@@ -50,21 +48,26 @@ function isComplete(s: Omit<StudentSummary, "portraitUrl" | "workMediaUrl" | "wo
 
 const stageColorSchema = z.enum(["slime", "crayon", "bubblegum"]);
 
+const draftLink = z
+  .string()
+  .trim()
+  .max(300)
+  .refine((v) => v === "" || z.string().url().safeParse(v).success, {
+    message: "Invalid URL",
+  });
+
 const profileInput = z.object({
-  displayName: z.string().trim().min(1).max(80),
-  pronouns: z.string().trim().min(1).max(40),
-  introduction: z.string().trim().min(1).max(500),
-  link: z.string().trim().url().max(300),
+  displayName: z.string().trim().max(80),
+  pronouns: z.string().trim().max(40),
+  introduction: z.string().trim().max(80),
+  link: draftLink,
   stageColor: stageColorSchema.nullable(),
-  competencies: z
-    .array(z.string().trim().min(1).max(40))
-    .min(1)
-    .max(8),
+  competencies: z.array(z.string().trim().min(1).max(40)).max(5),
 });
 
 export const studentRouter = router({
   listEligible: publicProcedure.query(async (): Promise<StudentSummary[]> => {
-    const rows = await db.select().from(student).where(eq(student.isPublished, true));
+    const rows = await db.select().from(student);
     const comps = await db.select().from(studentCompetency);
     const byStudent = new Map<string, string[]>();
     for (const c of comps) {
@@ -101,6 +104,52 @@ export const studentRouter = router({
     return all.filter(isComplete);
   }),
 
+  byUserId: publicProcedure
+    .input(z.object({ userId: z.string() }))
+    .query(async ({ input }): Promise<StudentSummary | null> => {
+      const rows = await db
+        .select()
+        .from(student)
+        .where(eq(student.userId, input.userId));
+      const row = rows[0];
+      if (!row) return null;
+      const comps = await db
+        .select()
+        .from(studentCompetency)
+        .where(eq(studentCompetency.studentUserId, input.userId));
+      const assetIds = [row.portraitAssetId, row.workMediaAssetId].filter(
+        (v): v is string => v !== null && v !== undefined,
+      );
+      const assetRows =
+        assetIds.length > 0
+          ? await db.select().from(asset).where(inArray(asset.id, assetIds))
+          : [];
+      const byId = new Map(assetRows.map((a) => [a.id, a]));
+      const portraitRow = row.portraitAssetId
+        ? byId.get(row.portraitAssetId)
+        : undefined;
+      const workRow = row.workMediaAssetId
+        ? byId.get(row.workMediaAssetId)
+        : undefined;
+      return {
+        userId: row.userId,
+        displayName: row.displayName,
+        pronouns: row.pronouns,
+        introduction: row.introduction,
+        link: row.link,
+        stageColor: (row.stageColor as StageColor | null) ?? null,
+        competencies: comps.map((c) => c.tag),
+        portraitUrl: portraitRow
+          ? getAssetStore().publicUrl(portraitRow.r2Key)
+          : null,
+        workMediaUrl: workRow ? getAssetStore().publicUrl(workRow.r2Key) : null,
+        workMediaKind:
+          workRow?.kind === "work-image" || workRow?.kind === "work-video"
+            ? workRow.kind
+            : null,
+      };
+    }),
+
   getMyProfile: protectedProcedure.query(async ({ ctx }): Promise<MyProfile | null> => {
     const userId = ctx.session.user.id;
     const rows = await db.select().from(student).where(eq(student.userId, userId));
@@ -129,7 +178,6 @@ export const studentRouter = router({
       introduction: row.introduction,
       link: row.link,
       stageColor: (row.stageColor as StageColor | null) ?? null,
-      isPublished: row.isPublished,
       competencies: comps.map((c) => c.tag),
       portraitUrl: portraitRow ? getAssetStore().publicUrl(portraitRow.r2Key) : null,
       workMediaUrl: workRow ? getAssetStore().publicUrl(workRow.r2Key) : null,
@@ -153,7 +201,6 @@ export const studentRouter = router({
           introduction: input.introduction,
           link: input.link,
           stageColor: input.stageColor,
-          isPublished: false,
         });
       } else {
         await db
@@ -179,6 +226,28 @@ export const studentRouter = router({
       return { ok: true };
     }),
 
+  cohortTags: protectedProcedure
+    .input(z.object({ excludeUserId: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const sessionUserId = ctx.session.user.id;
+      const role = (ctx.session.user as { role?: string }).role;
+      const excludeId =
+        role === "staff" && input?.excludeUserId
+          ? input.excludeUserId
+          : sessionUserId;
+      const rows = await db
+        .select()
+        .from(studentCompetency)
+        .where(ne(studentCompetency.studentUserId, excludeId));
+      const counts = new Map<string, number>();
+      for (const r of rows) {
+        counts.set(r.tag, (counts.get(r.tag) ?? 0) + 1);
+      }
+      return Array.from(counts.entries())
+        .map(([tag, count]) => ({ tag, count }))
+        .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+    }),
+
   listPeers: protectedProcedure.query(async ({ ctx }) => {
     const me = ctx.session.user.id;
     const rows = await db
@@ -188,21 +257,4 @@ export const studentRouter = router({
     return rows;
   }),
 
-  setPublished: protectedProcedure
-    .input(z.object({ isPublished: z.boolean() }))
-    .mutation(async ({ ctx, input }): Promise<{ ok: true }> => {
-      const userId = ctx.session.user.id;
-      const rows = await db.select().from(student).where(eq(student.userId, userId));
-      if (rows.length === 0) {
-        throw new TRPCError({
-          code: "PRECONDITION_FAILED",
-          message: "Save profile before publishing",
-        });
-      }
-      await db
-        .update(student)
-        .set({ isPublished: input.isPublished, updatedAt: new Date() })
-        .where(eq(student.userId, userId));
-      return { ok: true };
-    }),
 });

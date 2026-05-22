@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { z } from "zod";
 
-import { CompanionView } from "@/components/companion-view";
+import { CompanionView } from "@/features/companion";
 
 const search = z.object({ code: z.string().optional() });
 

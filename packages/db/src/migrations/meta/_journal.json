@@ -15,6 +15,20 @@
       "when": 1779394867384,
       "tag": "0001_right_dust",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1779886800000,
+      "tag": "0002_budget_loan",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1780000000000,
+      "tag": "0003_drop_is_published",
+      "breakpoints": true
     }
   ]
 }

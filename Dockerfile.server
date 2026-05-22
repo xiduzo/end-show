@@ -20,8 +20,9 @@ RUN cd apps/server && bun run build
 
 FROM builder AS runner
 WORKDIR /app/apps/server
+RUN cp -r /app/packages/db/src/migrations /app/migrations
 ENV NODE_ENV=production
 ENV PORT=3000
-ENV MIGRATIONS_DIR=/app/packages/db/src/migrations
+ENV MIGRATIONS_DIR=/app/migrations
 EXPOSE 3000
 CMD ["bun", "run", "dist/index.mjs"]

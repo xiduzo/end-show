@@ -1,8 +1,5 @@
-import { db } from "@end-show/db";
-import { appearance } from "@end-show/db/schema/appearance";
-import { eq } from "drizzle-orm";
-
-import { getCapStatus } from "./exposure";
+import { getAppearanceLog } from "./appearanceLog";
+import { checkExposureCap } from "./exposureCap";
 
 type Tier = "kiosk" | "mobile";
 type Source = Tier | "rotation";
@@ -154,18 +151,17 @@ async function pickNextEligible(
     }
     if (!candidate) return null;
 
-    const status = await getCapStatus(candidate.studentUserId);
+    const status = await checkExposureCap(candidate.studentUserId);
     if (!status.overCap) return candidate;
     // silently skip; loop
   }
 }
 
 async function advance(ch: ChannelState): Promise<void> {
+  const log = getAppearanceLog();
+
   if (ch.current) {
-    await db
-      .update(appearance)
-      .set({ endedAt: new Date() })
-      .where(eq(appearance.id, ch.current.appearanceId));
+    await log.end(ch.current.appearanceId);
   }
 
   const next = await pickNextEligible(ch);
@@ -181,19 +177,15 @@ async function advance(ch: ChannelState): Promise<void> {
     return;
   }
 
-  const id = crypto.randomUUID();
-  const startedAt = Date.now();
-  await db.insert(appearance).values({
-    id,
+  const { id, startedAtMs } = await log.start({
     studentUserId: next.studentUserId,
     stageCode: ch.stageCode,
     source: next.source,
-    startedAt: new Date(startedAt),
   });
 
   ch.current = {
     studentUserId: next.studentUserId,
-    startedAt,
+    startedAt: startedAtMs,
     source: next.source,
     appearanceId: id,
   };
@@ -224,7 +216,7 @@ export async function pushToQueue(opts: {
     return { ok: false, reason: "already-queued" };
   }
 
-  const status = await getCapStatus(opts.studentUserId);
+  const status = await checkExposureCap(opts.studentUserId);
   if (status.overCap) {
     return { ok: false, reason: "exposure-cap", retryAfterMs: status.retryAfterMs };
   }

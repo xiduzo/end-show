@@ -2,7 +2,13 @@ import type { StudentSummary } from "@end-show/api/routers/student";
 import { cn } from "@end-show/ui/lib/utils";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { animate, type AnimationPlaybackControls } from "motion/react";
+import {
+  AnimatePresence,
+  animate,
+  motion,
+  type AnimationPlaybackControls,
+} from "motion/react";
+import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -23,16 +29,16 @@ type StageSnap = {
 };
 
 const STICKER_TONES = [
-  { bg: "bg-slime", fg: "text-slime" },
-  { bg: "bg-crayon", fg: "text-crayon" },
-  { bg: "bg-bubblegum", fg: "text-bubblegum" },
+  { bg: "bg-slime", fg: "text-slime-dark" },
+  { bg: "bg-crayon", fg: "text-crayon-dark" },
+  { bg: "bg-bubblegum", fg: "text-bubblegum-dark" },
   { bg: "bg-slide", fg: "text-chalkboard" },
 ];
 
 const PORTRAIT_TONES = [
   ["#ff5b23", "#481b07"],
   ["#d9e73c", "#363a0a"],
-  ["#f2bb06", "#493b00"],
+  ["#f2bb06", "#493800"],
   ["#f3b9ff", "#3e064a"],
   ["#3a39ff", "#06063c"],
   ["#7be0a8", "#0b3a23"],
@@ -111,6 +117,11 @@ export function CompanionView({
   const [stage, setStage] = useState<StageSnap | null>(null);
   const [focusIdx, setFocusIdx] = useState(0);
   const [isIdle, setIsIdle] = useState(false);
+  const [showcasedId, setShowcasedId] = useState<string | null>(null);
+  const [sourceRects, setSourceRects] = useState<{
+    card: DOMRect;
+    image: DOMRect;
+  } | null>(null);
 
   useEffect(() => {
     if (urlCode && isValidStageCode(urlCode) && urlCode !== stageCode) {
@@ -146,6 +157,9 @@ export function CompanionView({
   const onStageStudent = onStageId
     ? (list.find((s) => s.userId === onStageId) ?? null)
     : null;
+  const showcased = showcasedId
+    ? (list.find((s) => s.userId === showcasedId) ?? null)
+    : null;
 
   const fullQueue = useMemo(
     () => [...(queue?.kiosk ?? []), ...(queue?.mobile ?? [])],
@@ -158,24 +172,36 @@ export function CompanionView({
       : null;
   const isFocusedOnStage = focused != null && focused.userId === onStageId;
 
-  const send = useCallback(async () => {
-    if (!focused || isFocusedOnStage) return;
-    const res = await push.mutateAsync({
-      stageCode,
-      studentUserId: focused.userId,
-      tier,
-    });
-    if (!res.ok) {
-      if (res.reason === "currently-on-stage") toast.error("Already on stage");
-      else if (res.reason === "already-queued") toast.error("Already queued");
-      else if (res.reason === "exposure-cap") {
-        const secs = Math.ceil(res.retryAfterMs / 1000);
-        toast.error(`Capped — retry ~${secs}s`);
+  const sendStudent = useCallback(
+    async (s: StudentSummary) => {
+      if (s.userId === onStageId) return;
+      const res = await push.mutateAsync({
+        stageCode,
+        studentUserId: s.userId,
+        tier,
+      });
+      if (!res.ok) {
+        if (res.reason === "currently-on-stage")
+          toast.error("Already on stage");
+        else if (res.reason === "already-queued") toast.error("Already queued");
+        else if (res.reason === "exposure-cap") {
+          const secs = Math.ceil(res.retryAfterMs / 1000);
+          toast.error(`Capped — retry ~${secs}s`);
+        }
+      } else {
+        toast.success(`Sent ${s.displayName}`);
       }
-    } else {
-      toast.success(`Sent ${focused.displayName}`);
-    }
-  }, [focused, isFocusedOnStage, push, stageCode, tier]);
+    },
+    [onStageId, push, stageCode, tier],
+  );
+
+  const openShowcase = useCallback(
+    (s: StudentSummary, cardRect: DOMRect, imageRect: DOMRect) => {
+      setSourceRects({ card: cardRect, image: imageRect });
+      setShowcasedId(s.userId);
+    },
+    [],
+  );
 
   return (
     <div className="bg-lego relative flex h-full min-h-screen flex-col overflow-hidden text-chalkboard">
@@ -206,9 +232,10 @@ export function CompanionView({
             focusIdx={focusIdx}
             onFocusChange={setFocusIdx}
             onIdleChange={setIsIdle}
-            onTap={send}
+            onTap={openShowcase}
             inFlight={inFlight}
             onStageId={onStageId}
+            showcasedId={showcasedId}
           />
         )}
       </main>
@@ -221,6 +248,23 @@ export function CompanionView({
         stage={stage}
         idle={isIdle}
       />
+
+      <AnimatePresence>
+        {showcased && sourceRects && (
+          <Showcase
+            student={showcased}
+            sourceCardRect={sourceRects.card}
+            sourceImageRect={sourceRects.image}
+            isOnStage={showcased.userId === onStageId}
+            isQueued={inFlight.has(showcased.userId)}
+            onClose={() => setShowcasedId(null)}
+            onSend={async () => {
+              await sendStudent(showcased);
+              setShowcasedId(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -253,16 +297,16 @@ function Header({
   return (
     <header className="relative z-20 flex flex-wrap items-center gap-3 px-4 py-3 sm:px-6 sm:py-4">
       <h1 className="font-display text-lg font-bold tracking-tight sm:text-xl">
-        End Show<span className="text-slide">'26</span>
+        End Show<span className="text-slide-dark">'26</span>
       </h1>
 
       <button
         type="button"
         onClick={() => setEditing((v) => !v)}
-        className="bg-slide text-lego inline-flex items-center gap-2 rounded-full px-3 py-1 font-mono text-[10px] font-bold tracking-widest uppercase shadow-md"
+        className="bg-slide text-lego-dark inline-flex items-center gap-2 rounded-full px-3 py-1 font-mono text-[10px] font-bold tracking-widest uppercase shadow-md"
       >
         <span>{tier}</span>
-        <span className="text-lego/60">·</span>
+        <span className="text-lego-dark/60">·</span>
         <span>{stageCode ?? "default"}</span>
       </button>
 
@@ -316,16 +360,23 @@ function Lane({
   onTap,
   inFlight,
   onStageId,
+  showcasedId,
 }: {
   tier: "mobile" | "kiosk";
   students: StudentSummary[];
   focusIdx: number;
   onFocusChange: (i: number) => void;
   onIdleChange?: (idle: boolean) => void;
-  onTap: () => void;
+  onTap: (
+    student: StudentSummary,
+    sourceCardRect: DOMRect,
+    sourceImageRect: DOMRect,
+  ) => void;
   inFlight: Set<string>;
   onStageId: string | null;
+  showcasedId?: string | null;
 }) {
+  const paused = showcasedId != null;
   const N = students.length;
   const containerRef = useRef<HTMLDivElement>(null);
   const posRef = useRef(0);
@@ -427,7 +478,7 @@ function Lane({
 
   // idle auto-advance: snap to next card every IDLE_ADVANCE_MS, springy
   useEffect(() => {
-    if (N === 0) return;
+    if (N === 0 || paused) return;
     let timer: number;
     const tick = () => {
       if (
@@ -442,7 +493,7 @@ function Lane({
     };
     timer = window.setTimeout(tick, IDLE_ADVANCE_MS);
     return () => window.clearTimeout(timer);
-  }, [N, IDLE_ADVANCE_MS, springTo]);
+  }, [N, IDLE_ADVANCE_MS, springTo, paused]);
 
   // wheel + trackpad
   useEffect(() => {
@@ -524,6 +575,7 @@ function Lane({
     const isFocused = virt === baseIdx;
     const queued = inFlight.has(s.userId);
     const onStage = s.userId === onStageId;
+    if (showcasedId === s.userId) continue;
 
     // Row layout — cards share a vertical baseline. Scale and horizontal
     // offset both come from the design-reference TIERS table.
@@ -545,7 +597,8 @@ function Lane({
     const wx = x + xJitter * wonk;
     const wy = y + yJitter * wonk;
 
-    const fade = tier.opacity * Math.max(0, 1 - Math.max(0, absD - (K - 0.5)));
+    let fade = tier.opacity * Math.max(0, 1 - Math.max(0, absD - (K - 0.5)));
+    if (paused) fade = Math.min(1, fade * 1.4);
 
     cards.push(
       <div
@@ -560,15 +613,16 @@ function Lane({
         <button
           type="button"
           aria-label={`${s.displayName} — ${isFocused ? (onStage ? "on stage" : "tap to send") : "focus"}`}
-          onClick={() => {
+          onClick={(e) => {
             if (suppressClickRef.current) return;
             lastActivityRef.current = Date.now();
-            if (isFocused) {
-              onTap();
-              return;
-            }
-            dirRef.current = virt > posRef.current ? 1 : -1;
-            springTo(virt);
+            const cardEl = e.currentTarget as HTMLElement;
+            const cardRect = cardEl.getBoundingClientRect();
+            const imgEl = cardEl.querySelector(
+              "[data-polaroid-image]",
+            ) as HTMLElement | null;
+            const imgRect = imgEl?.getBoundingClientRect() ?? cardRect;
+            onTap(s, cardRect, imgRect);
           }}
           className="block cursor-pointer focus:outline-none"
         >
@@ -606,7 +660,7 @@ function FocusHint() {
   return (
     <div
       aria-hidden
-      className="text-slide pointer-events-none absolute top-6 left-1/2 z-20 -translate-x-1/2 font-mono text-[11px] tracking-[0.3em] uppercase"
+      className="text-slide-dark pointer-events-none absolute top-6 left-1/2 z-20 -translate-x-1/2 font-mono text-[11px] tracking-[0.3em] uppercase"
     >
       ◇ tap a card or swipe ◇
     </div>
@@ -671,7 +725,7 @@ function Polaroid({
         {/* on-screen tape (only when this card is currently on stage) */}
         {onStage && (
           <span
-            className="bg-crayon text-crayon absolute -top-3 left-1/2 z-10 -translate-x-1/2 -rotate-2 px-3 py-1 font-mono text-[10px] font-bold tracking-widest uppercase shadow-md"
+            className="bg-crayon text-crayon-dark absolute -top-3 left-1/2 z-10 -translate-x-1/2 -rotate-2 px-3 py-1 font-mono text-[10px] font-bold tracking-widest uppercase shadow-md"
             style={{
               clipPath:
                 "polygon(4% 0, 96% 0, 100% 50%, 96% 100%, 4% 100%, 0 50%)",
@@ -702,6 +756,7 @@ function Polaroid({
 
         {/* portrait area */}
         <div
+          data-polaroid-image
           className="relative aspect-[3/4] w-full overflow-hidden"
           style={{
             background: `radial-gradient(circle at 50% 55%, ${tone[0]}aa 0%, ${tone[1]} 78%)`,
@@ -723,7 +778,7 @@ function Polaroid({
         {/* caption */}
         <p
           className={cn(
-            "text-lego absolute right-0 bottom-3 left-0 px-2 text-center font-display font-bold",
+            "text-lego-dark absolute right-0 bottom-3 left-0 px-2 text-center font-display font-bold",
             focused ? "text-lg" : "text-sm",
           )}
           style={{ transform: `rotate(${captionTilt}deg)` }}
@@ -773,7 +828,7 @@ function FooterStatus({
       <span
         className={cn(
           "inline-flex items-center gap-2 rounded-full border border-chalkboard/15 bg-chalkboard/5 px-3 py-1 font-mono text-[10px] tracking-widest uppercase",
-          idle && "border-slide/40 bg-slide/10 text-slide",
+          idle && "border-slide/40 bg-slide/10 text-slide-dark",
         )}
       >
         <span
@@ -844,5 +899,304 @@ function EmptyState({ loading }: { loading: boolean }) {
         {loading ? "loading students…" : "no students published yet"}
       </p>
     </div>
+  );
+}
+
+type ShowcaseTarget = {
+  card: { x: number; y: number; width: number; height: number };
+  image: { width: number; height: number };
+  padding: number;
+};
+
+function useShowcaseTarget(): ShowcaseTarget {
+  const compute = (): ShowcaseTarget => {
+    if (typeof window === "undefined") {
+      return {
+        card: { x: 0, y: 0, width: 800, height: 500 },
+        image: { width: 280, height: 373 },
+        padding: 16,
+      };
+    }
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const isMobile = vw < 640;
+    const width = isMobile ? Math.min(vw - 24, 540) : Math.min(vw - 64, 900);
+    const height = isMobile
+      ? Math.min(vh - 80, 560)
+      : Math.min(vh - 80, 540);
+    const padding = isMobile ? 14 : 20;
+    const imageWidth = Math.min(
+      width * 0.38,
+      (height - padding * 2) * 0.75,
+      320,
+    );
+    const imageHeight = (imageWidth * 4) / 3;
+    return {
+      card: { x: (vw - width) / 2, y: (vh - height) / 2, width, height },
+      image: { width: imageWidth, height: imageHeight },
+      padding,
+    };
+  };
+  const [target, setTarget] = useState(compute);
+  useEffect(() => {
+    const onResize = () => setTarget(compute());
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return target;
+}
+
+function Showcase({
+  student,
+  sourceCardRect,
+  sourceImageRect,
+  isOnStage,
+  isQueued,
+  onClose,
+  onSend,
+}: {
+  student: StudentSummary;
+  sourceCardRect: DOMRect;
+  sourceImageRect: DOMRect;
+  isOnStage: boolean;
+  isQueued: boolean;
+  onClose: () => void;
+  onSend: () => void | Promise<void>;
+}) {
+  const sendDisabled = isOnStage;
+  const target = useShowcaseTarget();
+  const seed = hash(student.userId);
+  const tone = PORTRAIT_TONES[seed % PORTRAIT_TONES.length];
+  const competency = student.competencies[0];
+  const sticker = STICKER_TONES[hash(competency ?? "x") % STICKER_TONES.length];
+  const stickerTilt = rand(seed, 4) * 6;
+  const stickerLeft = 12 + rand(seed, 5) * 14;
+  const pinOffsetPx = rand(seed, 8) * 12;
+
+  // Image source = absolute viewport coords. We position image as a child of
+  // the morphing card with top/left = (sourceImage − sourceCard) initially, so
+  // at t=0 it sits exactly where the lane image was on screen.
+  const sourceImageLeft = sourceImageRect.x - sourceCardRect.x;
+  const sourceImageTop = sourceImageRect.y - sourceCardRect.y;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const spring = { type: "spring" as const, stiffness: 220, damping: 28 };
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-40"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+    >
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="absolute inset-0 cursor-zoom-out"
+      />
+
+      <motion.div
+        className="absolute top-0 left-0 origin-top-left bg-[#fdfaf2] shadow-[0_30px_90px_rgba(0,0,0,0.55)] will-change-transform"
+        initial={{
+          x: sourceCardRect.x,
+          y: sourceCardRect.y,
+          width: sourceCardRect.width,
+          height: sourceCardRect.height,
+        }}
+        animate={{
+          x: target.card.x,
+          y: target.card.y,
+          width: target.card.width,
+          height: target.card.height,
+        }}
+        exit={{
+          x: sourceCardRect.x,
+          y: sourceCardRect.y,
+          width: sourceCardRect.width,
+          height: sourceCardRect.height,
+          opacity: 0,
+        }}
+        transition={spring}
+        drag="y"
+        dragConstraints={{ top: -200, bottom: 0 }}
+        dragElastic={0.3}
+        dragSnapToOrigin
+        onDragEnd={(_, info) => {
+          if (info.offset.y < -80 && !sendDisabled) void onSend();
+        }}
+        style={{ touchAction: "none" }}
+      >
+        {competency && (
+          <span
+            className={cn(
+              "absolute -top-2 z-20 rounded-sm px-2 py-0.5 font-mono text-[10px] font-bold tracking-wider shadow-md",
+              sticker.bg,
+              sticker.fg,
+            )}
+            style={{
+              left: stickerLeft,
+              transform: `rotate(${stickerTilt}deg)`,
+            }}
+          >
+            {competency}
+          </span>
+        )}
+
+        {isOnStage && (
+          <span
+            className="bg-crayon text-crayon absolute -top-3 left-1/2 z-20 -translate-x-1/2 -rotate-2 px-3 py-1 font-mono text-[10px] font-bold tracking-widest uppercase shadow-md"
+            style={{
+              clipPath:
+                "polygon(4% 0, 96% 0, 100% 50%, 96% 100%, 4% 100%, 0 50%)",
+            }}
+          >
+            on screen
+          </span>
+        )}
+
+        <motion.div
+          aria-hidden
+          className="absolute top-2 z-20 h-4 w-4 -translate-x-1/2 rounded-full"
+          initial={{ left: sourceImageLeft + sourceImageRect.width / 2 + pinOffsetPx }}
+          animate={{ left: target.padding + target.image.width / 2 + pinOffsetPx }}
+          exit={{ left: sourceImageLeft + sourceImageRect.width / 2 + pinOffsetPx }}
+          transition={spring}
+          style={{
+            background:
+              "radial-gradient(circle at 35% 30%, #ff8a6a 0%, #ff5b23 45%, #b8350f 100%)",
+            boxShadow:
+              "0 2px 3px rgba(0,0,0,0.45), inset -1px -1px 2px rgba(0,0,0,0.35), inset 1px 1px 1.5px rgba(255,255,255,0.6)",
+          }}
+        />
+
+        <motion.div
+          className="absolute overflow-hidden"
+          initial={{
+            top: sourceImageTop,
+            left: sourceImageLeft,
+            width: sourceImageRect.width,
+            height: sourceImageRect.height,
+          }}
+          animate={{
+            top: target.padding,
+            left: target.padding,
+            width: target.image.width,
+            height: target.image.height,
+          }}
+          exit={{
+            top: sourceImageTop,
+            left: sourceImageLeft,
+            width: sourceImageRect.width,
+            height: sourceImageRect.height,
+          }}
+          transition={spring}
+          style={{
+            background: `radial-gradient(circle at 50% 55%, ${tone[0]}aa 0%, ${tone[1]} 78%)`,
+          }}
+        >
+          {student.portraitUrl ? (
+            <img
+              src={student.portraitUrl}
+              alt={student.displayName}
+              className="h-full w-full object-cover"
+              draggable={false}
+            />
+          ) : (
+            <span className="absolute inset-0 flex items-center justify-center font-mono text-xs tracking-widest text-chalkboard/30">
+              {initials(student.displayName)}
+            </span>
+          )}
+        </motion.div>
+
+        <motion.div
+          className="text-lego absolute flex flex-col"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ delay: 0.22, duration: 0.28 }}
+          style={{
+            top: target.padding,
+            left: target.padding + target.image.width + 24,
+            right: target.padding,
+            bottom: target.padding,
+          }}
+        >
+          <p className="text-lego/60 font-mono text-[11px] tracking-widest uppercase">
+            {student.pronouns}
+          </p>
+          <h2 className="font-display text-3xl leading-tight font-bold sm:text-4xl">
+            {student.displayName}
+            <span className="text-slide">.</span>
+          </h2>
+          <p className="text-lego/70 mt-3 font-mono text-sm leading-snug">
+            {student.introduction}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {student.competencies.map((c) => (
+              <span
+                key={`${student.userId}-${c}`}
+                className="border-lego/25 text-lego/85 rounded-full border px-3 py-1 font-mono text-[11px] tracking-wide"
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-auto flex items-end gap-3 pt-6">
+            {student.link && (
+              <div className="flex flex-col items-start gap-1">
+                <div className="bg-lego rounded-sm p-1.5">
+                  <QRCodeSVG
+                    value={student.link}
+                    size={88}
+                    bgColor="#1a1a2e"
+                    fgColor="#fdfaf2"
+                  />
+                </div>
+                <p className="text-lego/45 font-mono text-[9px] tracking-widest uppercase">
+                  {student.link.replace(/^https?:\/\//, "")}
+                </p>
+              </div>
+            )}
+
+            <div className="flex flex-1 flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!sendDisabled) void onSend();
+                }}
+                disabled={sendDisabled}
+                className={cn(
+                  "bg-slide text-lego rounded-full px-5 py-3 text-left font-mono text-sm font-bold tracking-widest uppercase shadow-md transition disabled:cursor-not-allowed disabled:opacity-50",
+                  !sendDisabled && "hover:brightness-110",
+                )}
+              >
+                ↑{" "}
+                {isOnStage
+                  ? "on stage"
+                  : isQueued
+                    ? "queued"
+                    : "send to stage"}
+              </button>
+              <p className="border-lego/15 text-lego/50 rounded-full border px-5 py-2 text-left font-mono text-[10px] tracking-widest uppercase">
+                ↑ or swipe up to throw
+              </p>
+              <p className="text-lego/40 text-center font-mono text-[10px] tracking-widest uppercase">
+                or tap outside to close
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      </motion.div>
+    </motion.div>
   );
 }

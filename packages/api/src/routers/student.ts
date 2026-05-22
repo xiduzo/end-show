@@ -6,8 +6,8 @@ import { TRPCError } from "@trpc/server";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 
+import { getAssetStore } from "../assetStore";
 import { protectedProcedure, publicProcedure, router } from "../index";
-import { publicUrlFor } from "../r2";
 
 export type StageColor = "slime" | "crayon" | "bubblegum";
 
@@ -91,8 +91,8 @@ export const studentRouter = router({
         introduction: r.introduction,
         link: r.link,
         stageColor: (r.stageColor as StageColor | null) ?? null,
-        portraitUrl: portrait ? publicUrlFor(portrait.r2Key) : null,
-        workMediaUrl: work ? publicUrlFor(work.r2Key) : null,
+        portraitUrl: portrait ? getAssetStore().publicUrl(portrait.r2Key) : null,
+        workMediaUrl: work ? getAssetStore().publicUrl(work.r2Key) : null,
         workMediaKind:
           work?.kind === "work-image" || work?.kind === "work-video" ? work.kind : null,
         competencies: byStudent.get(r.userId) ?? [],
@@ -131,8 +131,8 @@ export const studentRouter = router({
       stageColor: (row.stageColor as StageColor | null) ?? null,
       isPublished: row.isPublished,
       competencies: comps.map((c) => c.tag),
-      portraitUrl: portraitRow ? publicUrlFor(portraitRow.r2Key) : null,
-      workMediaUrl: workRow ? publicUrlFor(workRow.r2Key) : null,
+      portraitUrl: portraitRow ? getAssetStore().publicUrl(portraitRow.r2Key) : null,
+      workMediaUrl: workRow ? getAssetStore().publicUrl(workRow.r2Key) : null,
       workMediaKind:
         workRow?.kind === "work-image" || workRow?.kind === "work-video"
           ? workRow.kind

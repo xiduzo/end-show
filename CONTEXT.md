@@ -72,6 +72,16 @@ Selection strategy: **shuffled round-robin** — shuffle the eligible Student se
 ### Dwell
 The fixed time a Student is shown on Stage before the Stage advances. The same Dwell applies whether the next Student came from a Companion tap or from Rotation — there is one Stage clock, not two. Initial value: 30 seconds. Treated as a single system-wide setting, not per-Student.
 
+### Appearance Log
+The durable record of every time a Student has appeared on a Stage. Each entry captures `studentUserId`, `stageCode`, `source` (kiosk / mobile / rotation), `startedAt`, and `endedAt` (null while currently on Stage).
+
+The Appearance Log is the **only persistent piece** of the otherwise in-memory Queue subsystem (see [ADR-0007](docs/adr/0007-in-memory-queue-with-persistent-appearance-log.md)). Two consumers:
+
+1. **Exposure Cap** — reads recent entries to compute used-ms in the rolling 60-minute window.
+2. **Stage advance** — writes a new entry when a Student takes the Stage, and ends it when the Stage advances past them.
+
+The Appearance Log is the seam at which the Queue subsystem meets durable storage; nothing else in the Queue subsystem touches the database.
+
 ## Student lifecycle
 
 1. **Pre-created** — Staff seeds a Student account by email address. Profile exists but is empty.
@@ -149,6 +159,10 @@ Let `usage` be the sum of a Student's stored asset bytes and `budget` be the eff
 ### Transfer floor
 
 A Budget Transfer may not reduce the giver's effective Budget below **20 MB**. This is an absolute floor independent of current usage; a Student with high usage who transfers down to the floor will immediately enter the over-budget warning zone, but the transfer itself is permitted.
+
+### Asset slot eviction
+
+A Student has exactly one **Portrait slot** and one **Work Media slot**. Saving a new asset to a slot atomically replaces the prior occupant: the new asset is linked to the student row, then the prior asset's bytes are reclaimed from the Storage Pool and the underlying file is best-effort deleted from R2. The Student is never "between assets" — the slot always points at the canonical asset for that field. R2 delete failures are logged but do not roll back the slot swap; the asset row is the source of truth for Budget accounting.
 
 ## Deferred / out of scope (v1)
 

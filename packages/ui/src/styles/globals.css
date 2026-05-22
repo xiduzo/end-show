@@ -21,6 +21,12 @@
     --color-crayon: #f2bb06;
     --color-bubblegum: #f3b9ff;
 
+    --color-lego-dark: #01012d;
+    --color-slide-dark: #381404;
+    --color-slime-dark: #363a0a;
+    --color-crayon-dark: #493800;
+    --color-bubblegum-dark: #3e064a;
+
     --text-title-1: 17.125rem;
     --text-title-1--line-height: 1.2;
     --text-title-1--letter-spacing: -0.03em;
@@ -201,18 +207,3 @@
     }
 }
 
-@utility text-lego {
-    color: #01012d !important;
-}
-@utility text-slide {
-    color: #381404 !important;
-}
-@utility text-slime {
-    color: #2a2d03 !important;
-}
-@utility text-crayon {
-    color: #3e3003 !important;
-}
-@utility text-bubblegum {
-    color: #2d0436 !important;
-}

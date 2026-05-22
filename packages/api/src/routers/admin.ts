@@ -10,8 +10,8 @@ import {
   POOL_DISPLAYED_BYTES,
   POOL_PHYSICAL_BYTES,
 } from "../budget";
+import { getAssetStore } from "../assetStore";
 import { router, staffProcedure } from "../index";
-import { publicUrlFor } from "../r2";
 
 const profileInput = z.object({
   displayName: z.string().trim().min(1).max(80),
@@ -127,8 +127,8 @@ export const adminRouter = router({
         link: s?.link ?? "",
         isPublished: s?.isPublished ?? false,
         competencies: comps.map((c) => c.tag),
-        portraitUrl: portrait ? publicUrlFor(portrait.r2Key) : null,
-        workMediaUrl: work ? publicUrlFor(work.r2Key) : null,
+        portraitUrl: portrait ? getAssetStore().publicUrl(portrait.r2Key) : null,
+        workMediaUrl: work ? getAssetStore().publicUrl(work.r2Key) : null,
         workMediaKind:
           work?.kind === "work-image" || work?.kind === "work-video"
             ? work.kind

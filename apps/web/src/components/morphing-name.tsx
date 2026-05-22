@@ -1,12 +1,29 @@
 import { cn } from "@end-show/ui/lib/utils";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 const morphTime = 1.2;
 
-export function MorphingName({ text, className }: { text: string; className?: string }) {
+export function MorphingName({
+  text,
+  className,
+  compact = false,
+}: {
+  text: string;
+  className?: string;
+  compact?: boolean;
+}) {
+  const maxBlur = compact ? 6 : 100;
+  const blurCoef = compact ? 2 : 8;
   const text1Ref = useRef<HTMLSpanElement>(null);
   const text2Ref = useRef<HTMLSpanElement>(null);
   const sizerRef = useRef<HTMLSpanElement>(null);
+  const measureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const prevRef = useRef(text);
   const currentRef = useRef(text);
   const morphRef = useRef(0);
@@ -15,18 +32,22 @@ export function MorphingName({ text, className }: { text: string; className?: st
   const mountedRef = useRef(false);
   const [settled, setSettled] = useState(true);
   const [width, setWidth] = useState<number | null>(null);
+  const [bearing, setBearing] = useState(0);
 
-  const applyFraction = useCallback((fraction: number) => {
-    const c1 = text1Ref.current;
-    const c2 = text2Ref.current;
-    if (!c1 || !c2) return;
-    const f = Math.max(0.0001, Math.min(1, fraction));
-    const inv = Math.max(0.0001, 1 - f);
-    c2.style.filter = `blur(${Math.min(8 / f - 8, 100)}px)`;
-    c2.style.opacity = `${Math.pow(f, 0.4) * 100}%`;
-    c1.style.filter = `blur(${Math.min(8 / inv - 8, 100)}px)`;
-    c1.style.opacity = `${Math.pow(inv, 0.4) * 100}%`;
-  }, []);
+  const applyFraction = useCallback(
+    (fraction: number) => {
+      const c1 = text1Ref.current;
+      const c2 = text2Ref.current;
+      if (!c1 || !c2) return;
+      const f = Math.max(0.0001, Math.min(1, fraction));
+      const inv = Math.max(0.0001, 1 - f);
+      c2.style.filter = `blur(${Math.min(blurCoef / f - blurCoef, maxBlur)}px)`;
+      c2.style.opacity = `${Math.pow(f, 0.4) * 100}%`;
+      c1.style.filter = `blur(${Math.min(blurCoef / inv - blurCoef, maxBlur)}px)`;
+      c1.style.opacity = `${Math.pow(inv, 0.4) * 100}%`;
+    },
+    [blurCoef, maxBlur],
+  );
 
   const settle = useCallback(() => {
     const c1 = text1Ref.current;
@@ -66,12 +87,35 @@ export function MorphingName({ text, className }: { text: string; className?: st
   useLayoutEffect(() => {
     const el = sizerRef.current;
     if (!el) return;
-    const update = () => setWidth(el.offsetWidth);
-    update();
-    const ro = new ResizeObserver(update);
+    let cancelled = false;
+    const measure = async () => {
+      setWidth(el.offsetWidth);
+      const cs = window.getComputedStyle(el);
+      const font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+      try {
+        await document.fonts.load(font, text);
+      } catch {
+        // ignore
+      }
+      if (cancelled) return;
+      const canvas =
+        measureCanvasRef.current ??
+        (measureCanvasRef.current = document.createElement("canvas"));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.font = font;
+      const m = ctx.measureText(text);
+      const left = m.actualBoundingBoxLeft;
+      setBearing(Number.isFinite(left) ? left : 0);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+    return () => {
+      cancelled = true;
+      ro.disconnect();
+    };
+  }, [text]);
 
   useEffect(() => {
     let raf = 0;
@@ -100,11 +144,17 @@ export function MorphingName({ text, className }: { text: string; className?: st
   return (
     <span
       className={cn(
-        "relative inline-block align-baseline transition-[width] duration-500 ease-out",
-        !settled && "[filter:url(#stage-name-morph)_blur(0.6px)]",
+        "relative inline-block align-baseline transition-[width,transform] duration-1000 ease-out",
+        !settled &&
+          (compact
+            ? "[filter:url(#stage-name-morph-compact)_blur(0.4px)]"
+            : "[filter:url(#stage-name-morph)_blur(0.6px)]"),
         className,
       )}
-      style={width != null ? { width } : undefined}
+      style={{
+        ...(width != null ? { width } : {}),
+        transform: bearing ? `translateX(${bearing}px)` : undefined,
+      }}
     >
       <span ref={sizerRef} className="invisible inline-block whitespace-nowrap">
         {text}
@@ -147,6 +197,16 @@ function MorphFilter() {
                     0 1 0 0 0
                     0 0 1 0 0
                     0 0 0 255 -140"
+          />
+        </filter>
+        <filter id="stage-name-morph-compact">
+          <feColorMatrix
+            in="SourceGraphic"
+            type="matrix"
+            values="1 0 0 0 0
+                    0 1 0 0 0
+                    0 0 1 0 0
+                    0 0 0 12 -4"
           />
         </filter>
       </defs>

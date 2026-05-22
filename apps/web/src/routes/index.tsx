@@ -8,10 +8,11 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ConnectionIndicator } from "@/components/connection-indicator";
 import { HyperText } from "@/components/hyper-text";
 import { MorphingName } from "@/components/morphing-name";
-import { StageShaderBackdrop } from "@/components/stage-shader-backdrop";
 import { WordRotate } from "@/components/word-rotate";
+import { STAGE_PALETTE, STAGE_PALETTE_KEYS } from "@/lib/stage-palette";
 import { useStageCodeStore } from "@/lib/stageCode";
 import { trpc, trpcClient } from "@/utils/trpc";
+import { cn } from "@end-show/ui/lib/utils";
 
 type StageSnap = {
   stageCode: string | null;
@@ -81,6 +82,14 @@ function StageRoute() {
       ? students.data?.find((s) => s.userId === nextId)
       : null;
 
+  const [displayedNext, setDisplayedNext] = useState<StudentSummary | null>(
+    null,
+  );
+  useEffect(() => {
+    if (next) setDisplayedNext(next);
+    else if (!current) setDisplayedNext(null);
+  }, [next, current]);
+
   return (
     <div className="bg-lego relative h-full overflow-hidden text-chalkboard">
       <BackgroundDecor />
@@ -104,7 +113,7 @@ function StageRoute() {
         />
       )}
 
-      {next && <UpNextBadge student={next} />}
+      {displayedNext && <UpNextBadge student={displayedNext} />}
 
       <div className="relative z-10 flex h-full flex-col">
         {!current ? (
@@ -183,9 +192,11 @@ function DwellBar({
   }, [startedAt, dwellMs]);
 
   return (
-    <div className="absolute top-0 right-0 left-0 z-20 h-1 bg-chalkboard/5">
+    <div className="absolute top-0 right-0 left-0 z-20 h-2 bg-chalkboard/5">
       <div
-        className="bg-slide h-full transition-[width] duration-150 ease-linear"
+        className={cn("bg-slide h-full transition-[width]  ease-linear", {
+          "duration-150": pct > 2,
+        })}
         style={{ width: `${pct}%` }}
       />
     </div>
@@ -212,35 +223,30 @@ function UpNextBadge({ student }: { student: StudentSummary }) {
       className="absolute top-8 right-8 z-20 overflow-hidden rounded-full backdrop-blur transition-[width,background-color,box-shadow] duration-700 ease-out"
       style={{
         ...(width != null ? { width } : {}),
-        backgroundColor: scrim.dark,
-        boxShadow: `0 25px 50px -12px ${scrim.dark}80`,
+        backgroundColor: scrim.accent,
+        boxShadow: `0 25px 50px -12px ${scrim.accent}20`,
       }}
     >
       <div
         ref={innerRef}
-        className="flex w-max items-center gap-3 py-1.5 pr-5 pl-1.5"
+        className="flex w-max items-center gap-3 py-1.5 pr-6 pl-1.5"
       >
         <Avatar student={student} size={42} />
-        <div className="leading-tight">
-          <p className="font-mono text-[10px] tracking-widest text-chalkboard/50 uppercase">
-            Up next
-          </p>
+        <div
+          className="leading-tight transition-colors duration-700"
+          style={{ color: scrim.dark }}
+        >
+          <p className="font-mono text-xs tracking-widest uppercase">Up next</p>
           <MorphingName
             text={student.displayName}
-            className="font-display text-chalkboard font-bold"
+            compact
+            className={cn("font-display font-bold")}
           />
         </div>
       </div>
     </div>
   );
 }
-
-const STAGE_SCRIM: Record<string, { dark: string; accent: string }> = {
-  slime: { dark: "#363a0a", accent: "#d9e73c" },
-  crayon: { dark: "#493b00", accent: "#f2bb06" },
-  bubblegum: { dark: "#3e064a", accent: "#f3b9ff" },
-};
-const STAGE_SCRIM_KEYS = Object.keys(STAGE_SCRIM);
 
 function hashStr(s: string): number {
   let h = 0;
@@ -255,8 +261,8 @@ function resolveScrim(student: StudentSummary): {
 } {
   const key =
     student.stageColor ??
-    STAGE_SCRIM_KEYS[hashStr(student.userId) % STAGE_SCRIM_KEYS.length]!;
-  return STAGE_SCRIM[key]!;
+    STAGE_PALETTE_KEYS[hashStr(student.userId) % STAGE_PALETTE_KEYS.length]!;
+  return STAGE_PALETTE[key];
 }
 
 function CurrentStage({ student }: { student: StudentSummary }) {
@@ -268,13 +274,13 @@ function CurrentStage({ student }: { student: StudentSummary }) {
 
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-[55%] transition-[background-color] duration-700 ease-out"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-5 h-[35%] transition-[background-color] duration-700 ease-out"
         style={{
           backgroundColor: scrim.dark,
           maskImage:
-            "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.75) 40%, rgba(0,0,0,0) 100%)",
+            "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.75) 30%, rgba(0,0,0,0) 100%)",
           WebkitMaskImage:
-            "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.75) 40%, rgba(0,0,0,0) 100%)",
+            "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.75) 30%, rgba(0,0,0,0) 100%)",
         }}
       />
       <div
@@ -284,37 +290,54 @@ function CurrentStage({ student }: { student: StudentSummary }) {
         <Avatar student={student} size={144} withInitials />
 
         <div className="min-w-0">
-          <h1 className="font-display text-h1 flex items-baseline text-chalkboard">
-            <MorphingName text={student.displayName} />
-          </h1>
-          <p className="text-body-2 mt-4 max-w-3xl font-mono text-chalkboard/80">
+          <p className="font-mono text-sm -mb-8 tracking-widest text-chalkboard/60 uppercase">
             <WordRotate
-              className="text-chalkboard"
+              className="text-chalkboard/60"
               word={student.pronouns}
               delay={1000}
             />
-            <span className="text-chalkboard/40"> — </span>
+          </p>
+          <h1 className="font-display text-h1 flex items-baseline text-chalkboard">
+            <MorphingName text={student.displayName} />
+          </h1>
+          <p className="text-body-2 max-w-3xl font-mono text-chalkboard/80">
             <HyperText duration={400} delay={1200}>
               {student.introduction}
             </HyperText>
           </p>
-          <div className="mt-5 flex flex-wrap gap-2">
+          <motion.div
+            layout
+            className="mt-5 flex flex-wrap gap-2"
+            transition={{ duration: 0.5, ease: "easeInOut" }}
+          >
             <AnimatePresence mode="popLayout" initial={false}>
               {student.competencies.map((c, i) => (
                 <motion.span
                   key={`${student.userId}-${c}`}
-                  layoutId={c}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
+                  layout
+                  initial={{ opacity: 0, scale: 0.85 }}
+                  animate={{ opacity: 1, scale: 1 }}
                   exit={{
                     opacity: 0,
-                    y: 20,
-                    transition: { duration: 0.35, delay: 1, ease: "easeIn" },
+                    scale: 0.85,
+                    transition: {
+                      duration: 0.35,
+                      delay: 0.6 + i * 0.06,
+                      ease: "easeIn",
+                    },
                   }}
                   transition={{
-                    duration: 0.35,
-                    delay: 1.6 + i * 0.12,
-                    ease: "easeOut",
+                    opacity: {
+                      duration: 0.35,
+                      delay: 1.2 + i * 0.08,
+                      ease: "easeOut",
+                    },
+                    scale: {
+                      duration: 0.35,
+                      delay: 1.2 + i * 0.08,
+                      ease: "easeOut",
+                    },
+                    layout: { duration: 0.6, ease: "easeInOut" },
                   }}
                   className="rounded-full border border-chalkboard/25 font-extrabold px-4 py-1 font-mono text-sm text-chalkboard/85"
                 >
@@ -322,7 +345,7 @@ function CurrentStage({ student }: { student: StudentSummary }) {
                 </motion.span>
               ))}
             </AnimatePresence>
-          </div>
+          </motion.div>
         </div>
 
         {student.link && <LinkQr url={student.link} scrim={scrim} />}
@@ -407,9 +430,7 @@ function AssetPreloader({
         requestIdleCallback?: (cb: () => void) => number;
       }
     ).requestIdleCallback;
-    const handle = idle
-      ? idle(warm)
-      : window.setTimeout(warm, 1500);
+    const handle = idle ? idle(warm) : window.setTimeout(warm, 1500);
 
     return () => {
       cancelled = true;
@@ -530,7 +551,7 @@ function Avatar({
       }}
     >
       {withInitials && (
-        <span className="text-lego font-mono text-xs tracking-widest">
+        <span className="text-lego-dark font-mono text-xs tracking-widest">
           {initials}
         </span>
       )}
@@ -545,24 +566,46 @@ function LinkQr({
   url: string;
   scrim: { dark: string; accent: string };
 }) {
-  let host = url;
-  try {
-    host = new URL(url).host.replace(/^www\./, "");
-  } catch {
-    /* keep raw */
-  }
+  const [displayed, setDisplayed] = useState(url);
+  const [blurred, setBlurred] = useState(false);
+  const prevUrl = useRef(url);
+
+  useEffect(() => {
+    if (url === prevUrl.current) return;
+    prevUrl.current = url;
+    setBlurred(true);
+    const swap = setTimeout(() => setDisplayed(url), 220);
+    const clear = setTimeout(() => setBlurred(false), 440);
+    return () => {
+      clearTimeout(swap);
+      clearTimeout(clear);
+    };
+  }, [url]);
+
   return (
     <div className="flex flex-col items-end gap-2">
       <p className="font-mono text-[10px] pr-1 tracking-widest text-chalkboard/80 uppercase">
         scan me
       </p>
       <div className="qr-tinted rounded-xl bg-chalkboard p-3">
-        <QRCodeSVG
-          value={url}
-          size={126}
-          bgColor="#F8F9FA"
-          fgColor={scrim.dark}
-        />
+        <motion.div
+          animate={{
+            filter: blurred ? "blur(8px)" : "blur(0px)",
+            scale: blurred ? 0.9 : 1,
+            opacity: blurred ? 0.6 : 1,
+          }}
+          transition={{
+            duration: 0.22,
+            ease: blurred ? "circInOut" : "easeInOut",
+          }}
+        >
+          <QRCodeSVG
+            value={displayed}
+            size={126}
+            bgColor="#F8F9FA"
+            fgColor={scrim.dark}
+          />
+        </motion.div>
       </div>
     </div>
   );
@@ -575,7 +618,7 @@ function Idle({ stageCode }: { stageCode: string | null }) {
     <div className="flex h-full flex-col items-center justify-center gap-12 px-12">
       <div className="text-center">
         <h1 className="font-display text-h1 leading-none">
-          End Show<span className="text-slide">.</span>
+          End Show<span className="text-slide-dark">.</span>
         </h1>
         <p className="mt-3 font-mono text-sm tracking-widest text-chalkboard/40 uppercase">
           Master Digital Design · graduation
@@ -619,7 +662,7 @@ function ConfirmGenerate({
         <p className="mt-2 font-mono text-sm text-chalkboard/60">
           Current:{" "}
           {currentCode ? (
-            <code className="text-slide">{currentCode}</code>
+            <code className="text-slide-dark">{currentCode}</code>
           ) : (
             <span className="text-chalkboard/40">default channel</span>
           )}
@@ -647,7 +690,7 @@ function ConfirmGenerate({
           <button
             type="button"
             onClick={onGenerate}
-            className="bg-slide text-lego rounded-full px-4 py-1.5 text-sm font-bold"
+            className="bg-slide text-lego-dark rounded-full px-4 py-1.5 text-sm font-bold"
           >
             Generate
           </button>

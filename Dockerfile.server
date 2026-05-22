@@ -12,7 +12,7 @@ COPY packages/config/package.json ./packages/config/
 COPY packages/db/package.json ./packages/db/
 COPY packages/env/package.json ./packages/env/
 COPY packages/ui/package.json ./packages/ui/
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile && bun add @libsql/linux-x64-gnu --cwd apps/server
 
 FROM deps AS builder
 COPY . .

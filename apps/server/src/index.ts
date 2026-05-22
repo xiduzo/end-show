@@ -3,6 +3,7 @@ import { setRotationProvider } from "@end-show/api/queue/engine";
 import { appRouter } from "@end-show/api/routers/index";
 import { auth } from "@end-show/auth";
 import { db } from "@end-show/db";
+import { runMigrations } from "@end-show/db/migrate";
 import { student } from "@end-show/db/schema/student";
 import { env } from "@end-show/env/server";
 import { Hono } from "hono";
@@ -25,6 +26,7 @@ app.get("/", (c) => c.text("OK"));
 
 const port = Number(process.env.PORT ?? 3000);
 
+await runMigrations();
 await seedStudents();
 
 setRotationProvider(async () => {

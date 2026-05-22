@@ -7,6 +7,7 @@ import * as schema from "./schema";
 export function createDb() {
   const client = createClient({
     url: env.DATABASE_URL,
+    authToken: env.LIBSQL_AUTH_TOKEN,
   });
 
   return drizzle({ client, schema });

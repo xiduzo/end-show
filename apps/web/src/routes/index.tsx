@@ -2,16 +2,21 @@ import type { StudentSummary } from "@end-show/api/routers/student";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { z } from "zod";
 
 import { ConnectionIndicator } from "@/shell";
 import { MorphingName } from "@/features/text-effects";
+import { QRCodeSVG } from "qrcode.react";
+
 import {
   BackgroundDecor,
+  STAGE_HEIGHT,
+  STAGE_WIDTH,
   StageCard,
   resolveScrim,
   resolveWorkMedia,
 } from "@/features/stage";
-import { useStageCodeStore } from "@/features/stage";
+import { useStageCode } from "@/features/stage";
 import { trpc, trpcClient } from "@/lib/trpc";
 import { useTapGesture } from "@/lib/use-tap-gesture";
 import { cn } from "@end-show/ui/lib/utils";
@@ -31,24 +36,25 @@ type QueueSnap = {
   next: string | null;
 };
 
+const stageSearch = z.object({ code: z.string().optional() });
+
 export const Route = createFileRoute("/")({
-  beforeLoad: () => {
+  validateSearch: stageSearch,
+  beforeLoad: ({ search }) => {
     if (typeof window === "undefined") return;
     const standalone =
       window.matchMedia?.("(display-mode: standalone)").matches ||
       (window.navigator as Navigator & { standalone?: boolean }).standalone ===
         true;
     if (standalone) {
-      throw redirect({ to: "/companion" });
+      throw redirect({ to: "/companion", search });
     }
   },
   component: StageRoute,
 });
 
 function StageRoute() {
-  const stageCode = useStageCodeStore((s) => s.stageCode);
-  const generate = useStageCodeStore((s) => s.generate);
-  const clear = useStageCodeStore((s) => s.clear);
+  const { stageCode, generate, clear } = useStageCode();
   const [snap, setSnap] = useState<StageSnap | null>(null);
   const [queue, setQueue] = useState<QueueSnap | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -112,7 +118,7 @@ function StageRoute() {
         <div className="bg-lego relative h-full w-full overflow-hidden text-chalkboard">
           <BackgroundDecor />
           <div className="relative z-10 flex h-full flex-col">
-            <Idle stageCode={stageCode} />
+            <Idle />
           </div>
         </div>
       )}
@@ -144,7 +150,6 @@ function StageRoute() {
           }}
           onClear={() => {
             clear();
-            setConfirmOpen(false);
           }}
         />
       )}
@@ -361,9 +366,7 @@ function AssetPreloader({
   );
 }
 
-function Idle({ stageCode }: { stageCode: string | null }) {
-  const base = window.location.origin;
-  const companion = `${base}/companion${stageCode ? `?code=${stageCode}` : ""}`;
+function Idle() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-12 px-12">
       <div className="text-center">
@@ -386,46 +389,83 @@ function ConfirmGenerate({
   onGenerate: () => void;
   onClear: () => void;
 }) {
+  const base = window.location.origin;
+  const pairUrl = `${base}/companion${currentCode ? `?code=${currentCode}` : ""}`;
+  const slots = Array.from({ length: 4 }, (_, i) => currentCode?.[i] ?? null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
   return (
-    <div className="absolute inset-0 z-40 flex items-center justify-center bg-white/70 backdrop-blur">
-      <div className="border-chalkboard/10 w-96 rounded-2xl border bg-white p-6 text-chalkboard shadow-2xl">
-        <h2 className="font-display text-lg font-bold">Stage setup</h2>
-        <p className="mt-2 font-mono text-sm text-chalkboard/60">
-          Current:{" "}
-          {currentCode ? (
-            <code className="text-slide-dark">{currentCode}</code>
-          ) : (
-            <span className="text-chalkboard/40">default channel</span>
-          )}
+    <div className="absolute inset-0 z-50 flex flex-col bg-chalkboard text-black">
+      <button
+        type="button"
+        onClick={onCancel}
+        className="absolute top-8 right-8 z-10 rounded-full border px-4 py-1.5 font-mono text-xs tracking-widest uppercase backdrop-blur"
+      >
+        Close
+      </button>
+
+      <div className="flex flex-1 flex-col items-center justify-center px-12">
+        <p className="font-mono text-sm tracking-[0.25em] uppercase">
+          pair a companion to this stage
         </p>
-        <p className="mt-4 text-sm text-chalkboard/80">
-          Generate a new code, return to default, or cancel.
-        </p>
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-full border border-chalkboard/20 px-4 py-1.5 text-sm"
-          >
-            Cancel
-          </button>
-          {currentCode && (
-            <button
-              type="button"
-              onClick={onClear}
-              className="rounded-full border border-chalkboard/20 px-4 py-1.5 text-sm"
+
+        <div
+          className="mt-8 flex items-center gap-4 sm:gap-6"
+          style={{ fontSize: "clamp(8rem, 22vw, 24rem)" }}
+        >
+          {slots.map((ch, i) => (
+            <span
+              key={i}
+              className={cn(
+                "font-display flex items-center justify-center leading-none tracking-tight",
+                ch ? "text-black" : "text-slide animate-pulse",
+              )}
+              style={{ width: "0.7em", height: "1em" }}
             >
-              Use default
-            </button>
-          )}
+              {ch ?? "•"}
+            </span>
+          ))}
+        </div>
+
+        <div className="mt-12 flex items-center gap-10">
+          <div className="qr-tinted rounded-2xl bg-chalkboard p-4">
+            <QRCodeSVG
+              value={pairUrl}
+              size={254}
+              bgColor="#F8F9FA"
+              fgColor="#1a1a1a"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-col items-center justify-center gap-3 pb-12">
+        {currentCode && (
           <button
             type="button"
-            onClick={onGenerate}
-            className="bg-slide text-lego-dark rounded-full px-4 py-1.5 text-sm font-bold"
+            onClick={() => {
+              onClear();
+              onCancel();
+            }}
+            className="rounded-full border px-5 py-2 font-mono text-sm backdrop-blur hover:bg-white"
           >
-            Generate
+            Use default
           </button>
-        </div>
+        )}
+        <button
+          type="button"
+          onClick={onGenerate}
+          className="bg-slide text-lego-dark rounded-full px-6 py-2 font-mono text-sm font-bold hover:brightness-105"
+        >
+          Generate new code
+        </button>
       </div>
     </div>
   );

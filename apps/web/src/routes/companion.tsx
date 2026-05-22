@@ -17,7 +17,6 @@ function detectTier(): "mobile" | "kiosk" {
 }
 
 function CompanionRoute() {
-  const { code } = Route.useSearch();
   const [tier, setTier] = useState<"mobile" | "kiosk">(detectTier);
 
   useEffect(() => {
@@ -27,5 +26,5 @@ function CompanionRoute() {
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
-  return <CompanionView tier={tier} urlCode={code ?? null} />;
+  return <CompanionView tier={tier} />;
 }

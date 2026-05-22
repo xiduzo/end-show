@@ -13,7 +13,7 @@ export const SHOWCASE_TIMEOUT_MS = 20_000;
 export const SENT_FLASH_MS = 1_400;
 
 /** Filter panel auto-collapse after no panel interaction. */
-export const FILTER_CLOSE_MS = 12_000;
+export const FILTER_CLOSE_MS = 8_000;
 
 /** Active filters auto-clear after no kiosk activity. */
-export const FILTER_RESET_MS = 45_000;
+export const FILTER_RESET_MS = 16_000;

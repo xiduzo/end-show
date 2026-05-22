@@ -1,7 +1,8 @@
 import type { StudentSummary } from "@end-show/api/routers/student";
 import { cn } from "@end-show/ui/lib/utils";
 
-import { hash, initials, PORTRAIT_TONES, rand, STICKER_TONES } from "./wonk";
+import { STAGE_PALETTE } from "@/features/stage";
+import { DEFAULT_ACCENT, hash, initials, rand, STICKER_TONES } from "./wonk";
 
 export function Polaroid({
   student,
@@ -14,7 +15,9 @@ export function Polaroid({
   width: number;
 }) {
   const seed = hash(student.userId);
-  const tone = PORTRAIT_TONES[seed % PORTRAIT_TONES.length];
+  const palette = student.stageColor
+    ? STAGE_PALETTE[student.stageColor]
+    : DEFAULT_ACCENT;
   const competency = student.competencies[0];
   const sticker = STICKER_TONES[hash(competency ?? "x") % STICKER_TONES.length];
   const stickerTilt = rand(seed, 4) * 14;
@@ -70,7 +73,7 @@ export function Polaroid({
           data-polaroid-image
           className="relative aspect-[3/4] w-full overflow-hidden"
           style={{
-            background: `radial-gradient(circle at 50% 55%, ${tone[0]}aa 0%, ${tone[1]} 78%)`,
+            background: `radial-gradient(circle at 50% 55%, ${palette.accent}aa 0%, ${palette.dark} 78%)`,
           }}
         >
           {student.portraitUrl ? (

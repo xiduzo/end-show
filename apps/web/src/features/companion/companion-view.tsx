@@ -1,14 +1,11 @@
 import type { StudentSummary } from "@end-show/api/routers/student";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AnimatePresence } from "motion/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ConnectionIndicator } from "@/shell";
-import {
-  isValidStageCode,
-  useStageCodeStore,
-} from "@/features/stage";
+import { useStageCode } from "@/features/stage";
 import { trpc, trpcClient } from "@/lib/trpc";
 import { useTapGesture } from "@/lib/use-tap-gesture";
 
@@ -23,16 +20,8 @@ import { useUserActivity } from "./use-user-activity";
 import { WallLane } from "./wall-lane";
 import { WallShowcase } from "./wall-showcase";
 
-export function CompanionView({
-  tier,
-  urlCode,
-}: {
-  tier: CompanionTier;
-  urlCode: string | null;
-}) {
-  const stageCode = useStageCodeStore((s) => s.stageCode);
-  const setStageCode = useStageCodeStore((s) => s.setStageCode);
-  const clearStageCode = useStageCodeStore((s) => s.clear);
+export function CompanionView({ tier }: { tier: CompanionTier }) {
+  const { stageCode, setStageCode, clear: clearStageCode } = useStageCode();
   const students = useQuery(trpc.student.listEligible.queryOptions());
   const push = useMutation(trpc.queue.push.mutationOptions());
   const [queue, setQueue] = useState<QueueSnap | null>(null);
@@ -48,15 +37,8 @@ export function CompanionView({
   const [pairOpen, setPairOpen] = useState(false);
 
   useTapGesture({
-    enabled: !pairOpen,
     onTrigger: () => setPairOpen(true),
   });
-
-  useEffect(() => {
-    if (urlCode && isValidStageCode(urlCode) && urlCode !== stageCode) {
-      setStageCode(urlCode);
-    }
-  }, [urlCode, stageCode, setStageCode]);
 
   useEffect(() => {
     const sub = trpcClient.queue.watch.subscribe(
@@ -119,6 +101,26 @@ export function CompanionView({
       : null;
   const isShowcasedOnStage =
     showcased != null && showcased.userId === onStageId;
+
+  const sentTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashSent = useCallback((s: StudentSummary) => {
+    if (sentTimeoutRef.current) clearTimeout(sentTimeoutRef.current);
+    setSentStudent(null);
+    requestAnimationFrame(() => {
+      setSentStudent(s);
+      sentTimeoutRef.current = setTimeout(() => {
+        setSentStudent(null);
+        sentTimeoutRef.current = null;
+      }, SENT_FLASH_MS);
+    });
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (sentTimeoutRef.current) clearTimeout(sentTimeoutRef.current);
+    },
+    [],
+  );
 
   const sendStudent = useCallback(
     async (s: StudentSummary) => {
@@ -185,6 +187,14 @@ export function CompanionView({
               students={filtered}
               showcasedId={showcasedId}
               onTap={openShowcase}
+              onThrow={async (s) => {
+                const res = await sendStudent(s);
+                if (res.ok) {
+                  flashSent(s);
+                  return true;
+                }
+                return false;
+              }}
               inFlight={inFlight}
             />
           </div>
@@ -205,21 +215,25 @@ export function CompanionView({
               const target = showcased;
               const res = await sendStudent(target);
               if (res.ok) {
-                setSentStudent(target);
                 setShowcasedId(null);
-                window.setTimeout(() => setSentStudent(null), SENT_FLASH_MS);
+                flashSent(target);
+                return true;
               }
+              return false;
             }}
           />
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {sentStudent && <SentFlash student={sentStudent} />}
+      <AnimatePresence mode="wait">
+        {sentStudent && (
+          <SentFlash key={sentStudent.userId} student={sentStudent} />
+        )}
       </AnimatePresence>
 
       {pairOpen && (
         <PairModal
+          initialCode={stageCode}
           onPair={(code) => {
             setStageCode(code);
             setPairOpen(false);

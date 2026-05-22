@@ -120,7 +120,7 @@ function RequestStep({ onSent }: { onSent: (email: string) => void }) {
                 </p>
               ))}
               <p className="text-lego-dark/55 mt-3 font-mono text-xs">
-                only @hva.nl + invited addresses are accepted
+                only invited addresses are accepted
               </p>
             </div>
           )}

@@ -1,5 +1,5 @@
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useCallback } from "react";
 
 // Crockford-ish alphabet: drop confusing chars (0/O, 1/I/L, U).
 const ALPHABET = "ABCDEFGHJKMNPQRSTVWXYZ23456789";
@@ -36,25 +36,41 @@ export function isValidStageCode(code: string): boolean {
   return !isProfane(code);
 }
 
-type StageCodeState = {
+type StageCodeHandle = {
   stageCode: string | null;
   setStageCode: (code: string | null) => void;
   generate: () => string;
   clear: () => void;
 };
 
-export const useStageCodeStore = create<StageCodeState>()(
-  persist(
-    (set) => ({
-      stageCode: null,
-      setStageCode: (code) => set({ stageCode: code }),
-      generate: () => {
-        const code = generateStageCode();
-        set({ stageCode: code });
-        return code;
-      },
-      clear: () => set({ stageCode: null }),
-    }),
-    { name: "end-show:stage-code" },
-  ),
-);
+export function useStageCode(): StageCodeHandle {
+  const search = useSearch({ strict: false }) as { code?: string };
+  const navigate = useNavigate();
+
+  const raw = search.code?.toUpperCase() ?? null;
+  const stageCode = raw && isValidStageCode(raw) ? raw : null;
+
+  const setStageCode = useCallback(
+    (code: string | null) => {
+      navigate({
+        to: ".",
+        search: (prev: Record<string, unknown>) => ({
+          ...prev,
+          code: code ?? undefined,
+        }),
+        replace: true,
+      });
+    },
+    [navigate],
+  );
+
+  const generate = useCallback(() => {
+    const code = generateStageCode();
+    setStageCode(code);
+    return code;
+  }, [setStageCode]);
+
+  const clear = useCallback(() => setStageCode(null), [setStageCode]);
+
+  return { stageCode, setStageCode, generate, clear };
+}

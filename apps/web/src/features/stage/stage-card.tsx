@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useRef, useState } from "react";
 
+type ResolvedMedia = ReturnType<typeof resolveWorkMedia>;
+
 import { HyperText } from "@/features/text-effects";
 import { MorphingName } from "@/features/text-effects";
 import { WordRotate } from "@/features/text-effects";
@@ -61,7 +63,7 @@ function CurrentStage({ student }: { student: StudentSummary }) {
             <MorphingName text={student.displayName} />
           </h1>
           <p className="text-body-3 font-mono text-chalkboard/80">
-            <HyperText duration={700} delay={1100}>
+            <HyperText duration={700} delay={700}>
               {student.introduction}
             </HyperText>
           </p>
@@ -115,29 +117,64 @@ function CurrentStage({ student }: { student: StudentSummary }) {
 }
 
 function WorkMedia({ student }: { student: StudentSummary }) {
-  const { displayName } = student;
   const media = resolveWorkMedia(student);
+  const key = `${student.userId}:${media.kind}:${media.kind !== "none" ? media.url : "shader"}`;
+
+  return (
+    <AnimatePresence mode="sync" initial={false}>
+      <motion.div
+        key={key}
+        initial={{ opacity: 0, scale: 1.04 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 1.02 }}
+        transition={{
+          opacity: { duration: 0.7, ease: "easeInOut" },
+          scale: { duration: 1.2, ease: [0.22, 1, 0.36, 1] },
+        }}
+        className="absolute inset-0 z-0"
+      >
+        <MediaSlide student={student} media={media} />
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+function MediaSlide({
+  student,
+  media,
+}: {
+  student: StudentSummary;
+  media: ResolvedMedia;
+}) {
+  const [ready, setReady] = useState(media.kind === "none");
 
   if (media.kind === "image") {
     return (
-      <img
+      <motion.img
         src={media.url}
-        alt={`${displayName} work`}
-        className="absolute inset-0 z-0 h-full w-full object-cover"
+        alt={`${student.displayName} work`}
+        className="h-full w-full object-cover"
+        onLoad={() => setReady(true)}
+        animate={{ opacity: ready ? 1 : 0 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
       />
     );
   }
 
   if (media.kind === "video") {
     return (
-      <video
+      <motion.video
         src={media.url}
         autoPlay
         muted
         loop
         playsInline
         crossOrigin="anonymous"
-        className="absolute inset-0 z-0 h-full w-full object-cover"
+        preload="auto"
+        className="h-full w-full object-cover"
+        onCanPlay={() => setReady(true)}
+        animate={{ opacity: ready ? 1 : 0 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
       />
     );
   }

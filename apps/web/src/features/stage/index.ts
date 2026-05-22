@@ -17,7 +17,7 @@ export {
 } from "./stage-palette";
 export {
   isValidStageCode,
-  useStageCodeStore,
+  useStageCode,
 } from "./stage-code-store";
 export {
   resolveStageColor,

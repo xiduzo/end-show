@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { isValidStageCode } from "@/features/stage";
 import { cn } from "@end-show/ui/lib/utils";
@@ -6,41 +6,53 @@ import { cn } from "@end-show/ui/lib/utils";
 const CODE_LENGTH = 4;
 
 export function PairModal({
+  initialCode,
   onPair,
   onSkip,
   onClose,
 }: {
+  initialCode?: string | null;
   onPair: (code: string) => void;
   onSkip: () => void;
   onClose: () => void;
 }) {
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(
+    (initialCode ?? "").toUpperCase().slice(0, CODE_LENGTH),
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const valid = isValidStageCode(code);
 
+  useEffect(() => {
+    inputRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div
-      className="bg-lego/80 fixed inset-0 z-50 flex items-center justify-center p-6 backdrop-blur"
-      onClick={onClose}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="border-chalkboard/10 w-full max-w-sm rounded-3xl border bg-[#fdfaf2] p-8 text-chalkboard shadow-2xl"
+    <div className="fixed inset-0 z-50 flex flex-col bg-chalkboard text-black">
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-8 right-8 z-10 rounded-full border px-4 py-1.5 font-mono text-xs tracking-widest uppercase backdrop-blur"
       >
-        <p className="text-chalkboard/60 font-mono text-xs font-bold tracking-widest uppercase">
-          Pair your phone
-        </p>
-        <h2 className="font-display mt-1 text-3xl leading-tight font-bold">
-          What screen?
-        </h2>
-        <p className="text-chalkboard/60 mt-3 text-sm">
-          type the 4 letters/numbers you see on the big screen.
+        Close
+      </button>
+
+      <button
+        type="button"
+        onClick={() => inputRef.current?.focus()}
+        className="flex flex-1 flex-col items-center justify-center px-12"
+      >
+        <p className="font-mono text-sm tracking-[0.25em] uppercase -mt-24">
+          pair this companion to a stage
         </p>
 
-        <button
-          type="button"
-          onClick={() => inputRef.current?.focus()}
-          className="mt-6 flex w-full items-center justify-center gap-3"
+        <div
+          className="mt-8 flex items-center gap-4 sm:gap-6"
+          style={{ fontSize: "clamp(5rem, 18vw, 20rem)" }}
         >
           {Array.from({ length: CODE_LENGTH }).map((_, i) => {
             const ch = code[i] ?? "";
@@ -49,68 +61,64 @@ export function PairModal({
               <span
                 key={i}
                 className={cn(
-                  "font-display flex h-16 w-14 items-center justify-center rounded-xl border-2 text-3xl font-bold",
+                  "font-display flex items-center justify-center leading-none tracking-tight",
                   ch
-                    ? "border-chalkboard text-chalkboard"
+                    ? "text-black"
                     : isCaret
-                      ? "border-slide text-chalkboard/40"
-                      : "border-chalkboard/20 text-chalkboard/40",
+                      ? "text-slide animate-pulse"
+                      : "text-black/15",
                 )}
+                style={{ width: "0.7em", height: "1em" }}
               >
-                {ch}
+                {ch || "•"}
               </span>
             );
           })}
-        </button>
-        <input
-          ref={inputRef}
-          autoFocus
-          inputMode="text"
-          autoCapitalize="characters"
-          autoComplete="off"
-          spellCheck={false}
-          maxLength={CODE_LENGTH}
-          value={code}
-          onChange={(e) =>
-            setCode(
-              e.target.value
-                .toUpperCase()
-                .replace(/[^A-Z0-9]/g, "")
-                .slice(0, CODE_LENGTH),
-            )
-          }
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && valid) onPair(code);
-          }}
-          className="sr-only"
-        />
+        </div>
 
+        <p className="mt-12 font-mono text-xs tracking-widest uppercase text-black/50">
+          type the 4-character code on the stage
+        </p>
+      </button>
+
+      <input
+        ref={inputRef}
+        inputMode="text"
+        autoCapitalize="characters"
+        autoComplete="off"
+        spellCheck={false}
+        maxLength={CODE_LENGTH}
+        value={code}
+        onChange={(e) =>
+          setCode(
+            e.target.value
+              .toUpperCase()
+              .replace(/[^A-Z0-9]/g, "")
+              .slice(0, CODE_LENGTH),
+          )
+        }
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && valid) onPair(code);
+        }}
+        className="sr-only"
+      />
+
+      <div className="flex flex-col items-center justify-center gap-3 pb-12">
+        <button
+          type="button"
+          onClick={onSkip}
+          className="rounded-full border px-5 py-2 font-mono text-sm backdrop-blur hover:bg-white"
+        >
+          Use default
+        </button>
         <button
           type="button"
           disabled={!valid}
           onClick={() => onPair(code)}
-          className="bg-slide text-lego-dark font-mono mt-6 w-full rounded-full px-6 py-4 text-sm font-bold tracking-widest lowercase disabled:opacity-40"
+          className="bg-slide text-lego-dark rounded-full px-6 py-2 font-mono text-sm font-bold hover:brightness-105 disabled:opacity-40"
         >
-          pair →
+          Pair →
         </button>
-
-        <hr className="border-chalkboard/10 my-6" />
-
-        <p className="text-chalkboard/60 text-center text-sm">
-          or skip — picks will go to the default channel (any unpaired stage).
-        </p>
-        <button
-          type="button"
-          onClick={onSkip}
-          className="border-chalkboard/20 font-mono mt-3 w-full rounded-full border px-6 py-3 text-sm tracking-widest lowercase"
-        >
-          skip · use default →
-        </button>
-
-        <p className="text-chalkboard/40 mt-8 text-center text-xs">
-          we use a signed cookie to rate-limit your picks. no account, no
-          tracking beyond tonight.
-        </p>
       </div>
     </div>
   );

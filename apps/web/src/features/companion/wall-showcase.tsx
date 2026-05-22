@@ -2,19 +2,12 @@ import type { StudentSummary } from "@end-show/api/routers/student";
 import { cn } from "@end-show/ui/lib/utils";
 import { motion } from "motion/react";
 import { QRCodeSVG } from "qrcode.react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { STAGE_PALETTE } from "@/features/stage";
 import { useBookLayout } from "./book-layout";
 import type { CompanionTier } from "./types";
-import {
-  DEFAULT_ACCENT,
-  hash,
-  initials,
-  PORTRAIT_TONES,
-  rand,
-  STICKER_TONES,
-} from "./wonk";
+import { DEFAULT_ACCENT, hash, initials, rand, STICKER_TONES } from "./wonk";
 
 export function WallShowcase({
   tier,
@@ -33,17 +26,24 @@ export function WallShowcase({
   isOnStage: boolean;
   isQueued: boolean;
   onClose: () => void;
-  onSend: () => void | Promise<void>;
+  onSend: () => Promise<boolean>;
 }) {
   const isMobile = tier === "mobile";
   const layout = useBookLayout(isMobile);
   const sendDisabled = false;
+  const [flying, setFlying] = useState(false);
+
+  const throwToStage = async () => {
+    if (sendDisabled || flying) return;
+    setFlying(true);
+    const ok = await onSend();
+    if (!ok) setFlying(false);
+  };
   const palette = student.stageColor
     ? STAGE_PALETTE[student.stageColor]
     : DEFAULT_ACCENT;
 
   const seed = hash(student.userId);
-  const tone = PORTRAIT_TONES[seed % PORTRAIT_TONES.length];
   const competency = student.competencies[0];
   const sticker = STICKER_TONES[hash(competency ?? "x") % STICKER_TONES.length];
   const stickerTilt = rand(seed, 4) * 6;
@@ -101,26 +101,48 @@ export function WallShowcase({
           width: sourceCardRect.width,
           height: sourceCardRect.height,
         }}
-        animate={{
-          x: layout.card.x,
-          y: layout.card.y,
-          width: layout.card.w,
-          height: layout.card.h,
-        }}
-        exit={{
-          x: sourceCardRect.x,
-          y: sourceCardRect.y,
-          width: sourceCardRect.width,
-          height: sourceCardRect.height,
-          opacity: 0,
-        }}
-        transition={spring}
-        drag={isMobile ? false : "y"}
-        dragConstraints={{ top: -200, bottom: 0 }}
+        animate={
+          flying
+            ? {
+                x: layout.card.x,
+                y: -window.innerHeight - 200,
+                width: layout.card.w,
+                height: layout.card.h,
+                rotate: -6,
+                opacity: 0,
+              }
+            : {
+                x: layout.card.x,
+                y: layout.card.y,
+                width: layout.card.w,
+                height: layout.card.h,
+              }
+        }
+        exit={
+          flying
+            ? {
+                y: -window.innerHeight - 200,
+                opacity: 0,
+              }
+            : {
+                x: sourceCardRect.x,
+                y: sourceCardRect.y,
+                width: sourceCardRect.width,
+                height: sourceCardRect.height,
+                opacity: 0,
+              }
+        }
+        transition={
+          flying ? { duration: 0.5, ease: [0.4, 0, 0.2, 1] } : spring
+        }
+        drag={isMobile || flying ? false : "y"}
+        dragConstraints={{ top: -400, bottom: 0 }}
         dragElastic={0.3}
-        dragSnapToOrigin
+        dragSnapToOrigin={!flying}
         onDragEnd={(_, info) => {
-          if (info.offset.y < -80 && !sendDisabled) void onSend();
+          if (info.offset.y < -80 || info.velocity.y < -600) {
+            void throwToStage();
+          }
         }}
         style={{
           touchAction: isMobile ? "auto" : "none",
@@ -186,7 +208,7 @@ export function WallShowcase({
           }}
           transition={spring}
           style={{
-            background: `radial-gradient(circle at 50% 55%, ${tone[0]}aa 0%, ${tone[1]} 78%)`,
+            background: `radial-gradient(circle at 50% 55%, ${palette.accent}aa 0%, ${palette.dark} 78%)`,
           }}
         >
           {student.portraitUrl ? (
@@ -296,9 +318,9 @@ export function WallShowcase({
                   <button
                     type="button"
                     onClick={() => {
-                      if (!sendDisabled) void onSend();
+                      void throwToStage();
                     }}
-                    disabled={sendDisabled}
+                    disabled={sendDisabled || flying}
                     style={{
                       backgroundColor: palette.accent,
                       color: palette.dark,
@@ -315,9 +337,6 @@ export function WallShowcase({
                         ? "bump in queue"
                         : "send to stage"}
                   </button>
-                  <p className="border-lego/15 text-lego/55 rounded-full border px-5 py-2 text-left font-mono text-[10px] tracking-widest uppercase">
-                    ↑ or swipe up to throw
-                  </p>
                 </div>
               </>
             )}

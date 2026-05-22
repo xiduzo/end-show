@@ -28,6 +28,7 @@ export function FindMeChip({
 }) {
   const [open, setOpen] = useState(false);
   const activeCount = (search ? 1 : 0) + selected.length;
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
   const { bump: bumpClose } = useUserActivity({
@@ -53,25 +54,36 @@ export function FindMeChip({
       if (e.key === "Escape") setOpen(false);
     };
     const isOutsidePanel = (target: EventTarget | null) =>
-      !panelRef.current || !(target instanceof Node) ||
+      !panelRef.current ||
+      !(target instanceof Node) ||
       !panelRef.current.contains(target);
+    const isOutsideRoot = (target: EventTarget | null) =>
+      !rootRef.current ||
+      !(target instanceof Node) ||
+      !rootRef.current.contains(target);
     const closeOnScroll = (e: Event) => {
       if (isOutsidePanel(e.target)) setOpen(false);
+    };
+    const closeOnOutsidePointer = (e: Event) => {
+      if (isOutsideRoot(e.target)) setOpen(false);
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("wheel", closeOnScroll, { passive: true });
     window.addEventListener("touchmove", closeOnScroll, { passive: true });
-    window.addEventListener("pointerdown", closeOnScroll, true);
+    window.addEventListener("pointerdown", closeOnOutsidePointer, true);
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("wheel", closeOnScroll);
       window.removeEventListener("touchmove", closeOnScroll);
-      window.removeEventListener("pointerdown", closeOnScroll, true);
+      window.removeEventListener("pointerdown", closeOnOutsidePointer, true);
     };
   }, [open]);
 
   return (
-    <div className="absolute top-8 right-8 z-30">
+    <div
+      ref={rootRef}
+      className="absolute top-8 left-1/2 z-30 -translate-x-1/2 sm:right-8 sm:left-auto sm:translate-x-0"
+    >
       <motion.button
         layout
         type="button"
@@ -123,7 +135,7 @@ export function FindMeChip({
             transition={{ duration: 0.18 }}
             onPointerDown={bumpClose}
             onTouchStart={bumpClose}
-            className="text-lego ring-lego/10 absolute right-0 mt-3 w-[22rem] touch-manipulation rounded-2xl bg-[#fdfaf2] p-5 shadow-2xl ring-1 sm:w-96"
+            className="text-lego ring-lego/10 absolute left-1/2 mt-3 w-[22rem] -translate-x-1/2 touch-manipulation rounded-2xl bg-[#fdfaf2] p-5 shadow-2xl ring-1 sm:right-0 sm:left-auto sm:w-96 sm:translate-x-0"
           >
             <p className="text-lego/55 font-mono text-xs font-bold tracking-widest uppercase">
               search

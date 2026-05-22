@@ -18,13 +18,10 @@ FROM deps AS builder
 COPY . .
 RUN cd apps/server && bun run build
 
-FROM oven/bun:${BUN_VERSION} AS runner
-WORKDIR /app
+FROM builder AS runner
+WORKDIR /app/apps/server
 ENV NODE_ENV=production
 ENV PORT=3000
-COPY --from=builder /app/apps/server/dist ./dist
-COPY --from=builder /app/apps/server/package.json ./package.json
-COPY --from=builder /app/packages/db/src/migrations ./migrations
-COPY --from=builder /app/node_modules ./node_modules
+ENV MIGRATIONS_DIR=/app/packages/db/src/migrations
 EXPOSE 3000
 CMD ["bun", "run", "dist/index.mjs"]

@@ -146,6 +146,21 @@ function enqueueUnique(ch: ChannelState, item: QueueItem): void {
   ch.queuer.addItem(item);
 }
 
+function isPreempter(src: AppearanceSource): boolean {
+  return src === "kiosk" || src === "mobile";
+}
+
+/** Drop any pending preempter from the queue. Only one preempter slot
+ *  exists at a time — a new preempt replaces the previous one. */
+function dropPreempters(ch: ChannelState): void {
+  const all = ch.queuer.peekAllItems();
+  if (!all.some((i) => isPreempter(i.appearanceSource))) return;
+  ch.queuer.clear();
+  for (const i of all) {
+    if (!isPreempter(i.appearanceSource)) ch.queuer.addItem(i);
+  }
+}
+
 async function nextRotationCandidate(ch: ChannelState): Promise<string | null> {
   const eligible = await rotationProvider();
   if (eligible.length === 0) return null;
@@ -255,13 +270,20 @@ export async function pushToQueue(opts: {
     ch.current = null;
     await log.end(old.appearanceId);
 
-    ch.resumeBump += 1;
-    enqueueUnique(ch, {
-      studentUserId: old.studentUserId,
-      source: "resume",
-      appearanceSource: old.source,
-      priority: PRIORITY.resume + ch.resumeBump,
-    });
+    // A new preempt replaces any prior preempter still pending in queue.
+    dropPreempters(ch);
+
+    // Only resume "natural" stage occupants (rotation arrivals). A previous
+    // preempter being preempted again is dropped, not requeued.
+    if (!isPreempter(old.source)) {
+      ch.resumeBump += 1;
+      enqueueUnique(ch, {
+        studentUserId: old.studentUserId,
+        source: "resume",
+        appearanceSource: old.source,
+        priority: PRIORITY.resume + ch.resumeBump,
+      });
+    }
     enqueueUnique(ch, {
       studentUserId: opts.studentUserId,
       source: opts.tier,
@@ -275,6 +297,7 @@ export async function pushToQueue(opts: {
   }
 
   // No one on stage — add (or silently bump dup) and kick advance.
+  dropPreempters(ch);
   enqueueUnique(ch, {
     studentUserId: opts.studentUserId,
     source: opts.tier,

@@ -37,6 +37,9 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
   const [search, setSearch] = useState("");
   const [selectedComps, setSelectedComps] = useState<string[]>([]);
   const [pairOpen, setPairOpen] = useState(false);
+  const [wallShuffleSeed, setWallShuffleSeed] = useState(() =>
+    Math.floor(Math.random() * 0x7fffffff),
+  );
 
   useTapGesture({
     onTrigger: () => setPairOpen(true),
@@ -174,6 +177,7 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
         onClear={() => {
           setSearch("");
           setSelectedComps([]);
+          setWallShuffleSeed(Math.floor(Math.random() * 0x7fffffff));
         }}
         resultCount={filtered.length}
         showcasedId={showcasedId}
@@ -190,6 +194,7 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
             <WallLane
               tier={tier}
               students={filtered}
+              shuffleSeed={wallShuffleSeed}
               showcasedId={showcasedId}
               onTap={openShowcase}
               onThrow={async (s) => {

@@ -140,15 +140,34 @@ export function FindMeChip({
             <p className="text-lego/55 font-mono text-xs font-bold tracking-widest uppercase">
               search
             </p>
-            <input
-              value={search}
-              onChange={(e) => {
-                onSearchChange(e.target.value);
-                bumpClose();
-              }}
-              placeholder="what are you looking for?"
-              className="border-lego/20 text-lego placeholder:text-lego/35 focus:border-lego/60 mt-2 w-full rounded-full border bg-transparent px-4 py-3 font-mono text-base outline-none"
-            />
+            <div className="relative mt-2">
+              <input
+                value={search}
+                onChange={(e) => {
+                  onSearchChange(e.target.value);
+                  bumpClose();
+                }}
+                placeholder="what are you looking for?"
+                className="border-lego/20 text-lego placeholder:text-lego/35 focus:border-lego/60 w-full rounded-full border bg-transparent px-4 py-3 pr-11 font-mono text-base outline-none"
+              />
+              <button
+                type="button"
+                aria-label="clear search"
+                onClick={() => {
+                  onSearchChange("");
+                  bumpClose();
+                }}
+                className={cn(
+                  "text-chalkboard bg-lego/80 p-6 transition-all right-0 absolute top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full font-mono text-base leading-none active:scale-[0.92]",
+                  {
+                    "opacity-0": !search,
+                    "opacity-100": !!search,
+                  },
+                )}
+              >
+                ×
+              </button>
+            </div>
             {competencies.length > 0 && (
               <>
                 <p className="text-lego/55 mt-4 font-mono text-xs font-bold tracking-widest uppercase">

@@ -1,4 +1,4 @@
-import { sendStudentInviteEmail } from "@end-show/auth/email";
+import { sendStaffInviteEmail, sendStudentInviteEmail } from "@end-show/auth/email";
 import { db } from "@end-show/db";
 import { asset, budgetLoan } from "@end-show/db/schema/asset";
 import { user } from "@end-show/db/schema/auth";
@@ -281,6 +281,11 @@ export const adminRouter = router({
         emailVerified: true,
         role: "staff",
       });
+      try {
+        await sendStaffInviteEmail({ to: input.email, name: input.name });
+      } catch (e) {
+        console.warn("[admin] staff invite email failed", e);
+      }
       return { userId };
     }),
 

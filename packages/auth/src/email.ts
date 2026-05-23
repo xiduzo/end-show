@@ -1,4 +1,5 @@
 import { env } from "@end-show/env/server";
+import { render } from "emailmd";
 
 export async function sendEmail(args: {
   to: string;
@@ -41,31 +42,119 @@ export function getWebHost(): string {
   return (first ?? env.BETTER_AUTH_URL).replace(/\/$/, "");
 }
 
+const THEME = {
+  brandColor: "#3a39ff",
+  headingColor: "#000000",
+  bodyColor: "#000000",
+  backgroundColor: "#f8f9fa",
+  contentColor: "#ffffff",
+  cardColor: "#f8f9fa",
+  buttonColor: "#000000",
+  buttonTextColor: "#ffffff",
+  fontFamily: "Montserrat, Inter, system-ui, sans-serif",
+  borderRadius: "6px",
+} as const;
+
+const FONTS = {
+  Montserrat:
+    "https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap",
+} as const;
+
+const FORCE_LIGHT_META = `<meta name="color-scheme" content="only light"><meta name="supported-color-schemes" content="only light"><style>:root{color-scheme:only light;supported-color-schemes:only light}</style>`;
+
+async function renderMd(markdown: string) {
+  const result = await render(markdown, { theme: THEME, fonts: FONTS });
+  const html = result.html.replace(/<head([^>]*)>/i, `<head$1>${FORCE_LIGHT_META}`);
+  return { html, text: result.text };
+}
+
 export async function sendStudentInviteEmail(args: {
   to: string;
   name: string;
 }) {
   const host = getWebHost();
   const profileUrl = `${host}/profile`;
+  const loginUrl = `${host}/login`;
   const subject = "You are invited to the End Show!";
-  const text = `Hi ${args.name},
 
-Fill your profile via ${profileUrl}.
+  const markdown = `---
+preheader: "Fill in your profile for the End Show"
+---
 
-See you there.`;
-  const html = `<p>Hi ${escapeHtml(args.name)},</p>
-<p>You've been invited to the End Show. Sign in with your email at <a href="${host}/login">${host}/login</a> and fill in your profile here:</p>
-<p><a href="${profileUrl}" style="display:inline-block;padding:10px 16px;background:#111;color:#fff;text-decoration:none;border-radius:6px">Fill in your profile</a></p>
-<p>Or open: <a href="${profileUrl}">${profileUrl}</a></p>`;
+# Hi ${args.name},
 
+You've been invited to the **End Show**.
+
+Sign in with your email at [${loginUrl}](${loginUrl}) and fill in your profile so we can show you off.
+
+[Fill in your profile](${profileUrl}){button}
+
+Or open: [${profileUrl}](${profileUrl})
+
+::: centered
+See you there.
+:::
+`;
+
+  const { html, text } = await renderMd(markdown);
   await sendEmail({ to: args.to, subject, text, html });
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+export async function sendStaffInviteEmail(args: { to: string; name: string }) {
+  const host = getWebHost();
+  const loginUrl = `${host}/login`;
+  const adminUrl = `${host}/admin`;
+  const subject = "You have been added as End Show staff";
+
+  const markdown = `---
+preheader: "You have admin access to the End Show"
+---
+
+# Hi ${args.name},
+
+You have been added as **staff** for the End Show.
+
+Sign in with your email at [${loginUrl}](${loginUrl}) to access the admin panel.
+
+[Open admin panel](${adminUrl}){button}
+
+Or open: [${adminUrl}](${adminUrl})
+`;
+
+  const { html, text } = await renderMd(markdown);
+  await sendEmail({ to: args.to, subject, text, html });
+}
+
+type OtpType = "sign-in" | "email-verification" | "forget-password";
+
+const OTP_SUBJECTS: Record<OtpType, string> = {
+  "sign-in": "Your sign-in code",
+  "email-verification": "Verify your email",
+  "forget-password": "Reset your password",
+};
+
+export async function sendOtpEmail(args: {
+  email: string;
+  otp: string;
+  type: OtpType;
+}) {
+  const subject = OTP_SUBJECTS[args.type] ?? "Your verification code";
+
+  const markdown = `---
+preheader: "Your one-time code"
+---
+
+# Your code
+
+::: highlight center
+**${args.otp}**
+:::
+
+It expires in **10 minutes**.
+
+If you didn't request this, ignore this email.
+`;
+
+  const { html, text } = await renderMd(markdown);
+  await sendEmail({ to: args.email, subject, text, html });
 }

@@ -15,6 +15,7 @@
     "@end-show/env": "workspace:*",
     "better-auth": "catalog:",
     "dotenv": "catalog:",
+    "emailmd": "^0.3.0",
     "zod": "catalog:"
   },
   "devDependencies": {

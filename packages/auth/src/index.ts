@@ -5,27 +5,9 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP } from "better-auth/plugins/email-otp";
 
-import { sendEmail } from "./email";
+import { sendOtpEmail } from "./email";
 
 type OtpType = "sign-in" | "email-verification" | "forget-password";
-
-const SUBJECTS: Record<OtpType, string> = {
-  "sign-in": "Your sign-in code",
-  "email-verification": "Verify your email",
-  "forget-password": "Reset your password",
-};
-
-async function sendOtpEmail(args: {
-  email: string;
-  otp: string;
-  type: OtpType;
-}) {
-  const { email, otp, type } = args;
-  const subject = SUBJECTS[type] ?? "Your verification code";
-  const text = `Your code is ${otp}. It expires in 10 minutes.`;
-  const html = `<p>Your code is <strong style="font-size:18px;letter-spacing:2px">${otp}</strong>.</p><p>It expires in 10 minutes.</p>`;
-  await sendEmail({ to: email, subject, text, html });
-}
 
 export function createAuth() {
   const db = createDb();

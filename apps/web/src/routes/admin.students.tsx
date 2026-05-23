@@ -310,6 +310,12 @@ function AdminStudentsRoute() {
     });
   };
 
+  const closeInvite = () => {
+    setInviteOpen(false);
+    setInviteName("");
+    setInviteEmail("");
+  };
+
   const handleInviteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = inviteName.trim();
@@ -318,9 +324,7 @@ function AdminStudentsRoute() {
     try {
       await createStudent.mutateAsync({ name, email });
       toast.success(`${name} added`);
-      setInviteName("");
-      setInviteEmail("");
-      setInviteOpen(false);
+      closeInvite();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not add student");
     }
@@ -616,7 +620,7 @@ function AdminStudentsRoute() {
       {inviteOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
-          onClick={() => !createStudent.isPending && setInviteOpen(false)}
+          onClick={() => !createStudent.isPending && closeInvite()}
         >
           <form
             onSubmit={handleInviteSubmit}
@@ -658,7 +662,7 @@ function AdminStudentsRoute() {
             <div className="mt-6 flex items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setInviteOpen(false)}
+                onClick={closeInvite}
                 disabled={createStudent.isPending}
                 className="h-9 rounded-full border border-ink/20 px-4 text-sm hover:border-ink/40 disabled:opacity-50"
               >
@@ -736,10 +740,7 @@ function FilterPill({
     >
       <span>{children}</span>
       <span
-        className={cn(
-          "text-xs",
-          active ? "text-chalkboard/70" : "text-ink/50",
-        )}
+        className={cn("text-xs", active ? "text-chalkboard/70" : "text-ink/50")}
       >
         {count}
       </span>
@@ -762,7 +763,8 @@ function Row({
   const [showcaseRect, setShowcaseRect] = useState<DOMRect | null>(null);
 
   const openComps = () => {
-    if (compsRef.current) setCompsRect(compsRef.current.getBoundingClientRect());
+    if (compsRef.current)
+      setCompsRect(compsRef.current.getBoundingClientRect());
   };
   const closeComps = () => setCompsRect(null);
   const openShowcase = () => {

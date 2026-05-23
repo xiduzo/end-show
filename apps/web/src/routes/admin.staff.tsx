@@ -39,6 +39,12 @@ function AdminStaffRoute() {
 
   const rows = list.data ?? [];
 
+  const closeInvite = () => {
+    setInviteOpen(false);
+    setInviteName("");
+    setInviteEmail("");
+  };
+
   const handleInviteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = inviteName.trim();
@@ -47,9 +53,7 @@ function AdminStaffRoute() {
     try {
       await createStaff.mutateAsync({ name, email });
       toast.success(`${name} added as staff`);
-      setInviteName("");
-      setInviteEmail("");
-      setInviteOpen(false);
+      closeInvite();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not add staff");
     }
@@ -163,7 +167,7 @@ function AdminStaffRoute() {
       {inviteOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
-          onClick={() => !createStaff.isPending && setInviteOpen(false)}
+          onClick={() => !createStaff.isPending && closeInvite()}
         >
           <form
             onSubmit={handleInviteSubmit}
@@ -205,7 +209,7 @@ function AdminStaffRoute() {
             <div className="mt-6 flex items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={() => setInviteOpen(false)}
+                onClick={closeInvite}
                 disabled={createStaff.isPending}
                 className="h-9 rounded-full border border-ink/20 px-4 text-sm hover:border-ink/40 disabled:opacity-50"
               >

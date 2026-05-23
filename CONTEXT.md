@@ -62,7 +62,7 @@ The sum of a Student's appearance durations on Stage, across **all Stages**, in 
 
 Stage Time is the single fairness signal in the system. It is **not** a cap — it never blocks a Companion tap and never causes Stage advance to skip a Student. It is consumed by two soft rankings:
 
-1. **Rotation pick** — the rotation pool is sorted by ascending Stage Time, then a random pick is made within the top-N most-overdue window.
+1. **Rotation pick** — the rotation pool is sorted by ascending Stage Time, the **top decile** of Stage-Time-leaders is dropped, and a random pick is made within the remainder.
 2. **Companion student list** — sorted by ascending Stage Time. When no search query or filter is active in the Companion UI, the top decile (≈10% most-shown Students) is hidden so casual browsing surfaces variety. The moment the visitor types a search or applies a filter, the hide flips off and every eligible Student is shown — intent overrides fairness.
 
 The 60-minute window matches the show's pacing: a Student's burst of attention naturally ages out within an hour, and the ranking has no discrete "now eligible again" boundary.
@@ -72,7 +72,7 @@ The 60-minute window matches the show's pacing: a Student's burst of attention n
 The Stage Time fairness signal is tuned by three constants. They are conceptually one policy and live together in the Stage Time module (`packages/api/src/queue/stageTime.ts`):
 
 - **`STAGE_TIME_WINDOW_MS`** — rolling window for Stage Time aggregation. Default: 60 minutes.
-- **`ROTATION_WINDOW`** — size of the most-overdue band that Rotation picks randomly from. Default: 12. Larger = more random feel; smaller = stricter fairness; 1 = pure least-Stage-Time-first.
+- **`ROTATION_DROP_DECILE`** — fraction of the Stage-Time-leading Students excluded from the Rotation pick; the remainder is the pool a random pick is drawn from. Default: 0.10. Larger = stricter fairness (more leaders excluded); 0 = uniform random over all eligible Students.
 - **`COMPANION_HIDE_DECILE`** — fraction of the Stage-Time-leading Students hidden from the Companion list while idle (no search or filter active). Default: 0.10. The "intent overrides fairness" flip — applied by the Companion UI when the visitor types a search or selects a competency — is a separate, caller-side concern.
 
 Changes to these constants are tuning, not architecture. They do not require an ADR.
@@ -80,7 +80,7 @@ Changes to these constants are tuning, not architecture. They do not require an 
 ### Rotation
 The automatic refill of the Queue when both Kiosk and Mobile tiers are empty. Ensures the Stage never goes blank.
 
-Selection strategy: sort the eligible Student pool by ascending **Stage Time**, then pick randomly within the top-N most-overdue window. Bigger N = feels more random, smaller N = stricter fairness; N=1 would be pure least-Stage-Time-first. Never-appeared Students rank as zero Stage Time and therefore surface first.
+Selection strategy: sort the eligible Student pool by ascending **Stage Time**, drop the top decile of Stage-Time-leaders, and pick randomly within the remainder. Never-appeared Students rank as zero Stage Time and therefore sit at the head of the pool; the decile drop only trims the most-shown tail, so variety is preserved without locking onto a small most-overdue band.
 
 ### Dwell
 The fixed time a Student is shown on Stage before the Stage advances. The same Dwell applies whether the next Student came from a Companion tap or from Rotation — there is one Stage clock, not two. Initial value: 30 seconds. Treated as a single system-wide setting, not per-Student.

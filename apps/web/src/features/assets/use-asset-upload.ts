@@ -1,8 +1,32 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { trpc } from "@/lib/trpc";
+
+const STAGE_TOLERANCE_MS = 1000;
+
+function probeVideoDurationMs(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    const cleanup = () => {
+      URL.revokeObjectURL(url);
+      video.src = "";
+    };
+    video.onloadedmetadata = () => {
+      const d = video.duration;
+      cleanup();
+      resolve(Number.isFinite(d) && d > 0 ? d * 1000 : null);
+    };
+    video.onerror = () => {
+      cleanup();
+      resolve(null);
+    };
+    video.src = url;
+  });
+}
 
 export type AssetKind = "portrait" | "work-image" | "work-video";
 
@@ -40,6 +64,7 @@ export function useAssetUpload(opts: {
   const candidatesRef = useRef<AssetKind[]>([]);
   const requestUpload = useMutation(trpc.asset.requestUpload.mutationOptions());
   const finalize = useMutation(trpc.asset.finalizeUpload.mutationOptions());
+  const stageConfig = useQuery(trpc.stage.config.queryOptions());
 
   const pickFile = (kindOrKinds: AssetKind | AssetKind[]) => {
     const kinds = Array.isArray(kindOrKinds) ? kindOrKinds : [kindOrKinds];
@@ -57,6 +82,21 @@ export function useAssetUpload(opts: {
     if (!file || !kind) return;
     e.target.value = "";
     setActiveKind(kind);
+
+    if (kind === "work-video" && stageConfig.data) {
+      const dwellMs = stageConfig.data.dwellMs;
+      const durationMs = await probeVideoDurationMs(file);
+      if (durationMs !== null && Math.abs(durationMs - dwellMs) > STAGE_TOLERANCE_MS) {
+        const stageSec = Math.round(dwellMs / 1000);
+        const videoSec = Math.round(durationMs / 100) / 10;
+        toast.warning(
+          durationMs > dwellMs
+            ? `Video is ${videoSec}s — only the first ${stageSec}s will be shown on stage.`
+            : `Video is ${videoSec}s — it will loop until the ${stageSec}s stage slot ends.`,
+        );
+      }
+    }
+
     setBusy(true);
     setProgress(0);
     try {

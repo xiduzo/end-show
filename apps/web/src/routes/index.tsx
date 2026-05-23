@@ -115,7 +115,10 @@ function StageRoute() {
   return (
     <div className="relative h-full overflow-hidden">
       {current ? (
-        <StageCard student={current} />
+        <StageCard
+          key={`${current.userId}:${snap?.current?.startedAt ?? 0}`}
+          student={current}
+        />
       ) : (
         <div className="bg-lego relative h-full w-full overflow-hidden text-chalkboard">
           <BackgroundDecor />

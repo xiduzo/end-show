@@ -76,6 +76,10 @@ export class R2AssetStore implements AssetStore {
   }
 
   publicUrl(key: string): string {
+    // Dev/seed convenience: seed rows store full URLs in r2Key so the wall
+    // can render real media without uploading anything to R2. Real keys are
+    // `students/.../portrait/...ext` and never start with http(s)://.
+    if (key.startsWith("http://") || key.startsWith("https://")) return key;
     if (env.R2_PUBLIC_URL) {
       return `${env.R2_PUBLIC_URL.replace(/\/$/, "")}/${key}`;
     }
@@ -134,6 +138,7 @@ export class InMemoryAssetStore implements AssetStore {
   }
 
   publicUrl(key: string): string {
+    if (key.startsWith("http://") || key.startsWith("https://")) return key;
     return `mem://asset/${key}`;
   }
 

@@ -6,7 +6,7 @@ The per-Student Exposure Cap is removed. A Companion tap may **preempt** the Stu
 
 Fairness now lives in two soft-signal rankings, both fed by **Stage Time** — the sum of a Student's appearance durations across **all Stages** in the last rolling 60 minutes:
 
-1. **Rotation pick** — the rotation pool is sorted by ascending Stage Time, then a random selection is made within the top-N most-overdue window. Replaces the previous "least-recently-seen" score.
+1. **Rotation pick** — the rotation pool is sorted by ascending Stage Time, the **top decile** of Stage-Time-leaders is dropped, and a random selection is made within the remainder. Replaces the previous "least-recently-seen" score.
 2. **Companion student list** — sorted by ascending Stage Time. When no search or filter is active, the **top decile** by Stage Time is hidden from the list. The moment the visitor types a search query or applies any filter, the hide flips off and every eligible Student is shown — intent overrides fairness.
 
 ## Why this shape
@@ -31,6 +31,7 @@ Fairness now lives in two soft-signal rankings, both fed by **Stage Time** — t
 - The two-checkpoint Cap discipline from ADR-0003 is gone. `pushToQueue` does not reject pushes for fairness reasons; Stage advance never silently skips a Student. Fairness is purely a *ranking* concern, never a *gating* concern.
 - `AppearanceLog.recentForStudent` becomes the read used by both the Rotation pick (the engine's `nextRotationCandidate` switches its score from `lastStartedAtFor` to summed Stage Time over the 60-min window) and the Companion-list ranking. The Appearance Log seam from ADR-0007 stands; it gains a new reader on the Companion path.
 - The Companion needs the Stage Time ranking from the server. A new query or a piggyback on the existing queue subscription will deliver it; transport choice is left to implementation.
-- "Top decile" is a tuning knob, not a domain constant. At ~50 Students this hides ~5 names when no filter is active. Re-tune after the first real-show traffic; record any change here as a one-line amendment.
+- "Top decile" is a tuning knob, not a domain constant. At ~50 Students this hides ~5 names when no filter is active, and drops ~5 names from the Rotation pool. Re-tune after the first real-show traffic; record any change here as a one-line amendment.
+- 2026-05-23 — Rotation pick changed from "random within top-12 most-overdue band" to "random within the pool minus top-decile Stage-Time leaders." A fixed 12-wide most-overdue band was felt as repetitive at our cohort size; dropping only the top decile keeps the leaders out without confining picks to a narrow band.
 - ADR-0008's "Exposure Cap applies equally regardless of tier" rationale is replaced by "fairness ranking applies equally regardless of tier" — the bound on tier abuse still exists, it is just soft.
 - `CONTEXT.md`'s "Promotion only, no interruption" Queue rule is dropped: preempt is the canonical Companion path. CONTEXT is updated alongside this ADR.

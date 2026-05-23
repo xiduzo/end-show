@@ -13,7 +13,7 @@ import {
   createBunWSHandler,
 } from "trpc-bun-adapter";
 
-import { seedRootStaff } from "./seed";
+import { seedRootStaff, seedStudents } from "./seed";
 
 const app = new Hono();
 
@@ -27,6 +27,7 @@ const port = Number(process.env.PORT ?? 3000);
 
 await runMigrations();
 await seedRootStaff();
+await seedStudents();
 
 // ADR-0007 §Recovery — close Appearance rows orphaned by a previous process
 // (in-memory Queue state is rebuilt fresh; an open row would otherwise

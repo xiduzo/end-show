@@ -88,13 +88,15 @@ export function WallLane({
     return () => ro.disconnect();
   }, []);
 
-  // Slot count is viewport-only: students cycle via i % N. Decoupling slots
-  // from N keeps TRACK_W stable when the filter changes the cohort size, so
-  // the lane doesn't jump its wrap seam.
-  const slots =
+  // Slot count must be at least N so every Student gets a home on the lane;
+  // otherwise sortedStudents[i % N] with i < slots only ever surfaces the
+  // first `slots` Students and the rest are invisible. Above N, viewport
+  // width sets the floor so a small cohort still fills the screen.
+  const viewportSlots =
     N === 0
       ? 0
       : Math.max(1, Math.ceil(((size.w || 800) + SPACING * 2) / SPACING));
+  const slots = N === 0 ? 0 : Math.max(N, viewportSlots);
   const TRACK_W = slots * SPACING;
 
   const applyTransform = useCallback(() => {

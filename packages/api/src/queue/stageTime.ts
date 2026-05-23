@@ -8,7 +8,8 @@ import { type AppearanceRecord, getAppearanceLog } from "./appearanceLog";
 /**
  * Stage Time — sum of a Student's on-Stage durations in the last rolling
  * window, across all Stages. Drives two soft rankings (ADR-0011):
- *   1. Rotation pick      — sort eligible pool ascending, random within top-N.
+ *   1. Rotation pick      — sort eligible pool ascending, drop top decile,
+ *                           random within the remainder.
  *   2. Companion list     — sort ascending, hide top decile while idle.
  * Never gates: never blocks a tap, never skips a queued Student.
  */
@@ -16,10 +17,11 @@ import { type AppearanceRecord, getAppearanceLog } from "./appearanceLog";
 /** Rolling window for the Stage Time fairness signal (ADR-0011). */
 export const STAGE_TIME_WINDOW_MS = 60 * 60 * 1000;
 
-/** Rotation picks randomly within the N least-Stage-Time Students.
- *  Bigger = feels more random; smaller = stricter fairness. 1 = pure
- *  least-Stage-Time-first. */
-const ROTATION_WINDOW = 12;
+/** Top fraction of Stage-Time-leading Students excluded from the Rotation
+ *  pick. Picking from the remainder (random) keeps variety while still
+ *  pushing the most-overdue Students into rotation. With <10 eligible
+ *  Students this drops to zero and every eligible Student is in play. */
+const ROTATION_DROP_DECILE = 0.1;
 
 /** Top fraction of Stage-Time-leading Students hidden from the Companion
  *  list while no search/filter is active. The "intent overrides fairness"
@@ -84,8 +86,9 @@ function aggregate(
 }
 
 /** Pick the next Rotation candidate: eligible pool minus `exclude`, sorted
- *  ascending by Stage Time, random pick within the top-N most-overdue
- *  window. Returns `null` when no Student is eligible. ADR-0011. */
+ *  ascending by Stage Time, drop the top decile of Stage-Time-leaders, then
+ *  random pick within the remainder. Returns `null` when no Student is
+ *  eligible. ADR-0011. */
 export async function pickForRotation(
   exclude: Set<string>,
 ): Promise<string | null> {
@@ -102,8 +105,9 @@ export async function pickForRotation(
     .map((id) => ({ id, ms: stageTime.get(id) ?? 0 }))
     .sort((a, b) => a.ms - b.ms);
 
-  const window = Math.min(scored.length, ROTATION_WINDOW);
-  return scored[Math.floor(Math.random() * window)]!.id;
+  const dropCount = Math.floor(scored.length * ROTATION_DROP_DECILE);
+  const candidates = scored.slice(0, scored.length - dropCount);
+  return candidates[Math.floor(Math.random() * candidates.length)]!.id;
 }
 
 /** Annotate a Companion's list of eligible Students with `stageTimeMs` and

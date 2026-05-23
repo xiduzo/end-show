@@ -1,6 +1,6 @@
 import type { StudentSummary } from "@end-show/api/routers/student";
 import { cn } from "@end-show/ui/lib/utils";
-import { motion } from "motion/react";
+import { motion, useAnimationControls } from "motion/react";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useState } from "react";
 
@@ -32,6 +32,9 @@ export function WallShowcase({
   const layout = useBookLayout(isMobile);
   const sendDisabled = false;
   const [flying, setFlying] = useState(false);
+  const cardControls = useAnimationControls();
+
+  const spring = { type: "spring" as const, stiffness: 220, damping: 28 };
 
   const throwToStage = async () => {
     if (sendDisabled || flying) return;
@@ -39,6 +42,41 @@ export function WallShowcase({
     const ok = await onSend();
     if (!ok) setFlying(false);
   };
+
+  useEffect(() => {
+    if (flying) {
+      void cardControls.start(
+        {
+          x: layout.card.x,
+          y: -window.innerHeight - 200,
+          width: layout.card.w,
+          height: layout.card.h,
+          rotate: -6,
+          opacity: 0,
+        },
+        { duration: 0.5, ease: [0.4, 0, 0.2, 1] },
+      );
+    } else {
+      void cardControls.start(
+        {
+          x: layout.card.x,
+          y: layout.card.y,
+          width: layout.card.w,
+          height: layout.card.h,
+          rotate: 0,
+          opacity: 1,
+        },
+        spring,
+      );
+    }
+  }, [
+    flying,
+    layout.card.x,
+    layout.card.y,
+    layout.card.w,
+    layout.card.h,
+    cardControls,
+  ]);
   const palette = student.stageColor
     ? STAGE_PALETTE[student.stageColor]
     : DEFAULT_ACCENT;
@@ -64,8 +102,6 @@ export function WallShowcase({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
-
-  const spring = { type: "spring" as const, stiffness: 220, damping: 28 };
 
   const foldClosed =
     layout.foldAxis === "y"
@@ -100,23 +136,7 @@ export function WallShowcase({
           width: sourceCardRect.width,
           height: sourceCardRect.height,
         }}
-        animate={
-          flying
-            ? {
-                x: layout.card.x,
-                y: -window.innerHeight - 200,
-                width: layout.card.w,
-                height: layout.card.h,
-                rotate: -6,
-                opacity: 0,
-              }
-            : {
-                x: layout.card.x,
-                y: layout.card.y,
-                width: layout.card.w,
-                height: layout.card.h,
-              }
-        }
+        animate={cardControls}
         exit={
           flying
             ? {
@@ -131,16 +151,25 @@ export function WallShowcase({
                 opacity: 0,
               }
         }
-        transition={
-          flying ? { duration: 0.5, ease: [0.4, 0, 0.2, 1] } : spring
-        }
+        transition={spring}
         drag={isMobile || flying ? false : "y"}
         dragConstraints={{ top: -400, bottom: 0 }}
         dragElastic={0.3}
-        dragSnapToOrigin={!flying}
         onDragEnd={(_, info) => {
           if (info.offset.y < -80 || info.velocity.y < -600) {
             void throwToStage();
+          } else {
+            void cardControls.start(
+              {
+                x: layout.card.x,
+                y: layout.card.y,
+                width: layout.card.w,
+                height: layout.card.h,
+                rotate: 0,
+                opacity: 1,
+              },
+              spring,
+            );
           }
         }}
         style={{

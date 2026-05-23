@@ -33,7 +33,7 @@ export function ShaderBg() {
           uAmplitude={3.2}
           uDensity={0.8}
           uFrequency={5.5}
-          uSpeed={0.15}
+          uSpeed={0.01}
           uStrength={0.3}
           uTime={0}
         />

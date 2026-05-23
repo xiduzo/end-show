@@ -14,15 +14,7 @@ import {
 } from "../budget";
 import { getAssetStore } from "../assetStore";
 import { router, staffProcedure } from "../index";
-import type { StageColor } from "./student";
-
-const draftLink = z
-  .string()
-  .trim()
-  .max(300)
-  .refine((v) => v === "" || z.string().url().safeParse(v).success, {
-    message: "Invalid URL",
-  });
+import { draftLink, type StageColor } from "./student";
 
 const stageColorSchema = z.enum(["slime", "crayon", "bubblegum"]);
 

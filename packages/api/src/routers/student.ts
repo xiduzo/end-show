@@ -61,7 +61,7 @@ function isComplete(s: Omit<StudentSummary, "portraitUrl" | "workMediaUrl" | "wo
 
 const stageColorSchema = z.enum(["slime", "crayon", "bubblegum"]);
 
-const draftLink = z
+export const draftLink = z
   .string()
   .trim()
   .max(300)

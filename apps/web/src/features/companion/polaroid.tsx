@@ -1,9 +1,25 @@
 import type { StudentSummary } from "@end-show/api/routers/student";
 import { cn } from "@end-show/ui/lib/utils";
-import { motion } from "motion/react";
+import { motion, useInView } from "motion/react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { STAGE_PALETTE } from "@/features/stage";
 import { DEFAULT_ACCENT, hash, initials, rand, STICKER_TONES } from "./wonk";
+
+const DEVELOP_CLEAR =
+  "brightness(1) contrast(1) saturate(1) hue-rotate(0deg) blur(0px)";
+const DEVELOP_INITIAL =
+  "brightness(2.4) contrast(0.15) saturate(0) hue-rotate(195deg) blur(3px)";
+const DEVELOP_KEYFRAMES = [
+  "brightness(2.4) contrast(0.15) saturate(0) hue-rotate(195deg) blur(2px)",
+  "brightness(1.9) contrast(0.35) saturate(0.25) hue-rotate(170deg) blur(1px)",
+  "brightness(1.45) contrast(0.65) saturate(0.6) hue-rotate(60deg) blur(0.6px)",
+  DEVELOP_CLEAR,
+];
+const DEVELOP_BASE_DURATION = 1.4;
+const DEVELOP_DURATION_JITTER = 0.6; // ±0.6s → per-card duration in [0.8s, 2.0s]
+const DEVELOP_STOP_JITTER = 0.07; // ±0.07 on the intermediate timing stops
+const DEVELOP_EXTRA_DELAY = 0.25; // 0–0.25s extra wait before this card starts
 
 export function Polaroid({
   student,
@@ -27,8 +43,42 @@ export function Polaroid({
   const stickerLeft = 12 + rand(seed, 5) * 18;
   const captionTilt = rand(seed, 7) * 2.5;
 
+  // Per-card develop timing — duration, the two intermediate "wet" stops, and
+  // an extra startup wait all jitter on a stable seed so a batch of polaroids
+  // developing in parallel feels physical (one card lands clear while the
+  // next is still cyan, another lingers in the magenta phase). Stable per
+  // student so the timing doesn't shift across re-renders.
+  const developTiming = useMemo(() => {
+    const duration =
+      DEVELOP_BASE_DURATION + rand(seed, 20) * DEVELOP_DURATION_JITTER;
+    const stop1 = 0.25 + rand(seed, 21) * DEVELOP_STOP_JITTER;
+    const stop2 = 0.6 + rand(seed, 22) * DEVELOP_STOP_JITTER;
+    const extraDelay = ((rand(seed, 23) + 1) / 2) * DEVELOP_EXTRA_DELAY;
+    return {
+      duration,
+      times: [0, stop1, stop2, 1],
+      extraDelay,
+    };
+  }, [seed]);
+
+  // Develop runs when the polaroid actually enters the viewport — buffered
+  // slots stay undeveloped so a fast scroll reveals the blur→clear animation
+  // instead of pre-developing off-screen and arriving already clear. Latches
+  // once via `developed` so a student prop swap inside a persistent slot
+  // doesn't replay the keyframes.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inView = useInView(rootRef, { once: true });
+  const [developed, setDeveloped] = useState(developDelay === undefined);
+  useEffect(() => {
+    if (developDelay === undefined || !inView || developed) return;
+    const totalDelay = developDelay + developTiming.extraDelay;
+    const ms = totalDelay * 1000 + developTiming.duration * 1000 + 50;
+    const t = window.setTimeout(() => setDeveloped(true), ms);
+    return () => window.clearTimeout(t);
+  }, [developDelay, inView, developed, developTiming]);
+
   return (
-    <div className="relative will-change-transform">
+    <div ref={rootRef} className="relative will-change-transform">
       <div
         className={cn(
           "relative bg-[#fdfaf2] p-3 pb-14 shadow-2xl",
@@ -61,27 +111,25 @@ export function Polaroid({
             willChange: "filter",
           }}
           initial={
-            developDelay !== undefined
-              ? {
-                  filter:
-                    "brightness(2.4) contrast(0.15) saturate(0) hue-rotate(195deg) blur(3px)",
-                }
-              : false
+            developDelay !== undefined ? { filter: DEVELOP_INITIAL } : false
           }
-          animate={{
-            filter: [
-              "brightness(2.4) contrast(0.15) saturate(0) hue-rotate(195deg) blur(2px)",
-              "brightness(1.9) contrast(0.35) saturate(0.25) hue-rotate(170deg) blur(1px)",
-              "brightness(1.45) contrast(0.65) saturate(0.6) hue-rotate(60deg) blur(0.6px)",
-              "brightness(1) contrast(1) saturate(1) hue-rotate(0deg) blur(0px)",
-            ],
-          }}
-          transition={{
-            duration: 1.4,
-            times: [0, 0.25, 0.6, 1],
-            ease: "easeInOut",
-            delay: developDelay ?? 0,
-          }}
+          animate={
+            developed
+              ? { filter: DEVELOP_CLEAR }
+              : inView
+                ? { filter: DEVELOP_KEYFRAMES }
+                : { filter: DEVELOP_INITIAL }
+          }
+          transition={
+            developed || !inView
+              ? { duration: 0 }
+              : {
+                  duration: developTiming.duration,
+                  times: developTiming.times,
+                  ease: "easeInOut",
+                  delay: (developDelay ?? 0) + developTiming.extraDelay,
+                }
+          }
         >
           {student.portraitUrl ? (
             <img

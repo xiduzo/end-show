@@ -10,6 +10,7 @@ import { hash, rand } from "./wonk";
 export function WallLane({
   tier,
   students,
+  shuffleSeed,
   showcasedId,
   onTap,
   onThrow,
@@ -17,6 +18,7 @@ export function WallLane({
 }: {
   tier: CompanionTier;
   students: StudentSummary[];
+  shuffleSeed: number;
   showcasedId: string | null;
   onTap: (
     student: StudentSummary,
@@ -27,19 +29,24 @@ export function WallLane({
   inFlight: Set<string>;
 }) {
   const isMobile = tier === "mobile";
-  // Stabilise wall display order: server sorts by Stage Time for fairness,
-  // but slot→student mapping must not reshuffle when the server reorders or
-  // when filters change. Sort by userId so each Student has a deterministic
-  // home on the lane.
+  // Stable per-seed order: server sorts by Stage Time for fairness, but slot→
+  // student mapping must not reshuffle on every filter tweak. Sort key derives
+  // from (seed, userId) so the order is deterministic until the seed bumps —
+  // companion-view bumps it on filter clear.
   const sortedStudents = useMemo(
-    () => [...students].sort((a, b) => a.userId.localeCompare(b.userId)),
-    [students],
+    () =>
+      [...students].sort(
+        (a, b) =>
+          hash(`${shuffleSeed}::${a.userId}`) -
+          hash(`${shuffleSeed}::${b.userId}`),
+      ),
+    [students, shuffleSeed],
   );
   const N = sortedStudents.length;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
-  const posRef = useRef(0); // px the lane has scrolled
+  const posRef = useRef(0); // px the lane has scrolled — unbounded, never wrapped
   const dirRef = useRef<1 | -1>(1); // +1 = lane scrolls forward (cards move left)
   const velocityRef = useRef(0); // px/frame energy on top of baseline drift
   const dragRef = useRef<null | {
@@ -65,6 +72,8 @@ export function WallLane({
     { slotKey: string; studentId: string }[]
   >([]);
   const [throwActive, setThrowActive] = useState(false);
+  const baseIdxRef = useRef(0);
+  const [baseIdx, setBaseIdx] = useState(0);
   const paused = showcasedId != null || throwActive;
 
   // Lane geometry. SPACING is centre-to-centre distance between slots; cards
@@ -88,45 +97,47 @@ export function WallLane({
     return () => ro.disconnect();
   }, []);
 
-  // Slot count must be at least N so every Student gets a home on the lane;
-  // otherwise sortedStudents[i % N] with i < slots only ever surfaces the
-  // first `slots` Students and the rest are invisible. Above N, viewport
-  // width sets the floor so a small cohort still fills the screen.
-  const viewportSlots =
+  // Viewport-virtualised lane: render only the slots that fit on-screen plus a
+  // one-slot buffer on each side. Integer-slot shifts (when the lane drifts by
+  // SPACING px) advance baseIdx; the underlying student in each viewport slot
+  // is read from sortedStudents[(baseIdx + i) mod N]. Filtering shrinks N but
+  // never touches posRef, so the wall does not "scroll back to the front" when
+  // results change — the same slots stay on screen, just with different faces.
+  const VIEWPORT_COUNT =
     N === 0
       ? 0
       : Math.max(1, Math.ceil(((size.w || 800) + SPACING * 2) / SPACING));
-  const slots = N === 0 ? 0 : Math.max(N, viewportSlots);
-  const TRACK_W = slots * SPACING;
 
+  // Position slots at absolute lane coordinates (logicalIdx * SPACING) and
+  // translate the track by the full unwrapped posRef. Previously the track
+  // was translated by `-frac` (posRef wrapped mod SPACING) while slot baseX
+  // used render-index `i`, so on the frame where Math.floor(posRef/SPACING)
+  // crossed a boundary, the track jumped by SPACING but React hadn't yet
+  // committed the new baseIdx — every visible card flipped one slot to the
+  // right for a single frame, then snapped back. Absolute positioning keeps
+  // each logicalIdx pinned to the same x in lane space; baseIdx now only
+  // controls which range of logicalIdx is mounted, not where they live.
   const applyTransform = useCallback(() => {
     const track = trackRef.current;
-    if (track)
-      track.style.transform = `translate3d(${-posRef.current}px, 0, 0)`;
-  }, []);
-
-  // After geometry changes, re-wrap so a posRef that lived in the old
-  // second-copy region doesn't snap to a different slot when TRACK_W shrinks.
-  useEffect(() => {
-    if (TRACK_W > 0) {
-      posRef.current = ((posRef.current % TRACK_W) + TRACK_W) % TRACK_W;
+    if (!track) return;
+    track.style.transform = `translate3d(${-posRef.current}px, 0, 0)`;
+    const newBase = Math.floor(posRef.current / SPACING);
+    if (newBase !== baseIdxRef.current) {
+      baseIdxRef.current = newBase;
+      setBaseIdx(newBase);
     }
-    applyTransform();
-  }, [applyTransform, TRACK_W]);
+  }, [SPACING]);
 
   // Continuous physics loop: baseline drift + decaying velocity from input.
   // While dragging, position is driven directly by the pointer handler.
   useEffect(() => {
-    if (N === 0 || paused || TRACK_W === 0) return;
+    if (N === 0 || paused) return;
     let raf = 0;
     const tick = () => {
       if (!dragRef.current) {
         const v = velocityRef.current;
         const step = dirRef.current * DRIFT_VEL + v;
-        let next = posRef.current + step;
-        if (next >= TRACK_W) next -= TRACK_W;
-        else if (next < 0) next += TRACK_W;
-        posRef.current = next;
+        posRef.current += step;
         applyTransform();
         const decayed = v * FRICTION;
         velocityRef.current = Math.abs(decayed) < MIN_VEL ? 0 : decayed;
@@ -135,15 +146,7 @@ export function WallLane({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [N, paused, TRACK_W, applyTransform]);
-
-  const wrap = useCallback(
-    (v: number) => {
-      if (TRACK_W <= 0) return v;
-      return ((v % TRACK_W) + TRACK_W) % TRACK_W;
-    },
-    [TRACK_W],
-  );
+  }, [N, paused, applyTransform]);
 
   const addImpulse = useCallback((delta: number) => {
     if (delta === 0) return;
@@ -223,7 +226,7 @@ export function WallLane({
 
     if (d.locked === "h") {
       if (Math.abs(dx) > 4) d.moved = true;
-      posRef.current = wrap(d.startPos - dx);
+      posRef.current = d.startPos - dx;
       applyTransform();
       const now = performance.now();
       const stepX = e.clientX - d.lastX;
@@ -305,102 +308,122 @@ export function WallLane({
       <div
         ref={trackRef}
         className="absolute top-1/2 left-0 will-change-transform"
-        style={{ width: TRACK_W * 2, height: 0 }}
+        style={{ height: 0 }}
       >
-        {[0, 1].map((copy) =>
-          Array.from({ length: slots }).map((_, i) => {
-            const s = sortedStudents[i % N];
-            if (!s) return null;
-            const slotKey = `${copy}-${i}-${s.userId}`;
-            const wrapperKey = `${copy}-${i}`;
-            const isThrown = throws.some((t) => t.slotKey === slotKey);
-            const otherCopyThrowing =
-              !isThrown && throws.some((t) => t.studentId === s.userId);
-            const hidden = showcasedId === s.userId || otherCopyThrowing;
-            const baseX = copy * TRACK_W + i * SPACING + SPACING / 2;
-            // Per-slot stable wonk — independent of student so swapping
-            // students on filter doesn't jitter position/rotation.
-            const seed = hash(`slot::${copy}-${i}`);
-            const yJitter = rand(seed, 11) * (size.h ? size.h * 0.06 : 24);
-            const rot = rand(seed, 12) * 4;
-            const widthMul = 0.95 + (rand(seed, 13) * 0.5 + 0.5) * 0.1; // 0.95–1.05
-            const cardW = BASE_CARD_W * widthMul;
-            const transform = isThrown
-              ? `translateY(calc(-50% - 110vh)) rotate(${rot - 8}deg)`
-              : `translateY(-50%) rotate(${rot}deg)`;
-            const transition = isThrown
-              ? "transform 550ms cubic-bezier(0.4,0,0.2,1), opacity 550ms ease-out"
-              : undefined;
-            return (
-              <div
-                key={wrapperKey}
-                data-card-wrapper=""
-                data-slot-key={slotKey}
-                data-student-id={s.userId}
-                data-rot={rot}
-                className="absolute"
-                style={{
-                  left: baseX - cardW / 2,
-                  top: yJitter,
-                  transform,
-                  transition,
-                  opacity: isThrown ? 0 : 1,
-                  visibility: hidden ? "hidden" : "visible",
+        {Array.from({ length: VIEWPORT_COUNT + 2 }).map((_, i) => {
+          // logicalIdx is the absolute lane position (can go negative as the
+          // user drags right). Render-array index `i` includes one buffer slot
+          // on each side of the viewport so cards enter/leave fully off-screen.
+          const logicalIdx = baseIdx + i - 1;
+          const studentIdx = (((logicalIdx % N) + N) % N) | 0;
+          const s = sortedStudents[studentIdx];
+          if (!s) return null;
+          const slotKey = `${logicalIdx}-${s.userId}`;
+          const wrapperKey = logicalIdx;
+          const isThrown = throws.some((t) => t.slotKey === slotKey);
+          const otherSlotThrowing =
+            !isThrown && throws.some((t) => t.studentId === s.userId);
+          const hidden = showcasedId === s.userId || otherSlotThrowing;
+          // Absolute lane coordinate — survives baseIdx shifts so a slot's
+          // pixel position is fixed for the life of its wrapper, regardless of
+          // when React commits the next render.
+          const baseX = logicalIdx * SPACING + SPACING / 2;
+          // Per-logical-index wonk — every time a card enters from off-screen
+          // it inherits a fresh wobble derived from its new lane position.
+          // React keys are also the logical index, so on-screen cards keep
+          // their DOM (and therefore their wobble) while the lane drifts.
+          const seed = hash(`slot::${logicalIdx}`);
+          const yJitter = rand(seed, 11) * (size.h ? size.h * 0.06 : 24);
+          const rot = rand(seed, 12) * 4;
+          const widthMul = 0.95 + (rand(seed, 13) * 0.5 + 0.5) * 0.1;
+          const cardW = BASE_CARD_W * widthMul;
+          const transform = isThrown
+            ? `translateY(calc(-50% - 110vh)) rotate(${rot - 8}deg)`
+            : `translateY(-50%) rotate(${rot}deg)`;
+          const transition = isThrown
+            ? "transform 550ms cubic-bezier(0.4,0,0.2,1), opacity 550ms ease-out"
+            : undefined;
+          return (
+            <div
+              key={wrapperKey}
+              data-card-wrapper=""
+              data-slot-key={slotKey}
+              data-student-id={s.userId}
+              data-rot={rot}
+              className="absolute"
+              style={{
+                left: baseX - cardW / 2,
+                top: yJitter,
+                transform,
+                transition,
+                opacity: isThrown ? 0 : 1,
+                visibility: hidden ? "hidden" : "visible",
+              }}
+            >
+              <button
+                type="button"
+                aria-label={`${s.displayName} — tap to open`}
+                onClick={(e) => {
+                  if (suppressClickRef.current) return;
+                  const cardEl = e.currentTarget as HTMLElement;
+                  const cardRect = cardEl.getBoundingClientRect();
+                  const imgEl = cardEl.querySelector(
+                    "[data-polaroid-image]",
+                  ) as HTMLElement | null;
+                  const imgRect = imgEl?.getBoundingClientRect() ?? cardRect;
+                  onTap(s, cardRect, imgRect);
                 }}
+                className="block cursor-pointer focus:outline-none"
               >
-                <button
-                  type="button"
-                  aria-label={`${s.displayName} — tap to open`}
-                  onClick={(e) => {
-                    if (suppressClickRef.current) return;
-                    const cardEl = e.currentTarget as HTMLElement;
-                    const cardRect = cardEl.getBoundingClientRect();
-                    const imgEl = cardEl.querySelector(
-                      "[data-polaroid-image]",
-                    ) as HTMLElement | null;
-                    const imgRect = imgEl?.getBoundingClientRect() ?? cardRect;
-                    onTap(s, cardRect, imgRect);
-                  }}
-                  className="block cursor-pointer focus:outline-none"
-                >
-                  <AnimatePresence mode="popLayout" initial={false}>
-                    <motion.div
-                      key={s.userId}
-                      initial={{ scale: 0.4, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      transition={{
-                        scale: {
-                          type: "spring",
-                          stiffness: 260,
-                          damping: 24,
-                          mass: 0.7,
-                          delay: (i % 10) * 0.04,
-                        },
-                        opacity: {
-                          duration: 0.25,
-                          delay: (i % 10) * 0.04,
-                        },
-                      }}
-                      style={{
-                        transformOrigin: "50% 60%",
-                        willChange: "transform, opacity",
-                      }}
-                    >
-                      <Polaroid
-                        student={s}
-                        focused={false}
-                        queued={inFlight.has(s.userId)}
-                        width={cardW}
-                        developDelay={(i % 10) * 0.04 + 0.55}
-                      />
-                    </motion.div>
-                  </AnimatePresence>
-                </button>
-              </div>
-            );
-          }),
-        )}
+                {/* initial={false} suppresses the pop on first mount, so
+                    cards that scroll in from off-screen appear silently.
+                    A later key change (student swap on filter / reshuffle)
+                    inside this still-mounted slot does animate. */}
+                {/* Pop-on-key-change drives the filter/seed-reshuffle UX:
+                    when sortedStudents changes the userId in this slot, old
+                    card exits + new card enters with a scale spring. Wrapper
+                    is keyed by logicalIdx and uses absolute positioning, so
+                    lane drift mounts/unmounts wrappers silently without ever
+                    swapping a userId inside a surviving slot. initial={false}
+                    suppresses the pop on a wrapper's first mount (scroll-in)
+                    so only filter-driven swaps animate. */}
+                <AnimatePresence mode="popLayout" initial={false}>
+                  <motion.div
+                    key={s.userId}
+                    initial={{ scale: 0.4, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    transition={{
+                      scale: {
+                        type: "spring",
+                        stiffness: 260,
+                        damping: 24,
+                        mass: 0.7,
+                        delay: (((logicalIdx % 10) + 10) % 10) * 0.04,
+                      },
+                      opacity: {
+                        duration: 0.25,
+                        delay: (((logicalIdx % 10) + 10) % 10) * 0.04,
+                      },
+                    }}
+                    style={{
+                      transformOrigin: "50% 60%",
+                      willChange: "transform, opacity",
+                    }}
+                  >
+                    <Polaroid
+                      student={s}
+                      focused={false}
+                      queued={inFlight.has(s.userId)}
+                      width={cardW}
+                      developDelay={(((logicalIdx % 10) + 10) % 10) * 0.04}
+                    />
+                  </motion.div>
+                </AnimatePresence>
+              </button>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

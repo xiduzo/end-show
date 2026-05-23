@@ -83,8 +83,8 @@ function AdminStaffRoute() {
           </button>
         </div>
 
-        <div className="mt-6 rounded-lg border border-ink/15 bg-white">
-          <div className="grid grid-cols-[minmax(180px,1.6fr)_minmax(220px,2fr)_minmax(120px,1fr)_80px] items-center gap-3 rounded-t-lg bg-lego px-4 py-3 text-xs tracking-[0.2em] uppercase text-chalkboard/70">
+        <div className="mt-6 overflow-x-auto rounded-lg border border-ink/15 bg-white">
+          <div className="grid min-w-[640px] grid-cols-[minmax(180px,1.6fr)_minmax(220px,2fr)_minmax(120px,1fr)_80px] items-center gap-3 rounded-t-lg bg-lego px-4 py-3 text-xs tracking-[0.2em] uppercase text-chalkboard/70">
             <span>Name</span>
             <span>Email</span>
             <span>Role</span>
@@ -104,7 +104,7 @@ function AdminStaffRoute() {
             {rows.map((r) => (
               <li
                 key={r.userId}
-                className="grid grid-cols-[minmax(180px,1.6fr)_minmax(220px,2fr)_minmax(120px,1fr)_80px] items-center gap-3 px-4 py-3 text-sm"
+                className="grid min-w-[640px] grid-cols-[minmax(180px,1.6fr)_minmax(220px,2fr)_minmax(120px,1fr)_80px] items-center gap-3 px-4 py-3 text-sm"
               >
                 <span className="font-display text-sm font-bold text-ink">
                   {r.name}

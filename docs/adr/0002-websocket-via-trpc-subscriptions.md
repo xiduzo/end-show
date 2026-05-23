@@ -5,7 +5,7 @@ All live coordination between Stage(s), Companions, and the server runs over a *
 ## Considered alternatives
 
 - **SSE (server-sent events).** Was the initial recommendation when the Stage was a pure consumer. Rejected once the design grew to need *bidirectional* reactivity: Kiosk Companion wants tap acknowledgements, Mobile Companion wants live queue-position feedback, Stage wants live queue badges. SSE would have forced a split brain (SSE for reads + HTTP for writes), doubling the reactivity surface.
-- **Polling.** Rejected: laggy feel on a venue display, wastes battery on visitor phones, and the priority/exposure-cap logic becomes uglier when state is fetched on a clock rather than pushed.
+- **Polling.** Rejected: laggy feel on a venue display, wastes battery on visitor phones, and the priority / fairness-ranking logic becomes uglier when state is fetched on a clock rather than pushed.
 
 ## Consequences
 

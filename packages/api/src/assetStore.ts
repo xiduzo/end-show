@@ -58,6 +58,7 @@ export class R2AssetStore implements AssetStore {
       Bucket: this.bucket(),
       Key: input.key,
       ContentType: input.mimeType,
+      CacheControl: "public, max-age=31536000, immutable",
     });
     const uploadUrl = await getSignedUrl(this.client(), command, { expiresIn });
     return { uploadUrl, expiresIn };

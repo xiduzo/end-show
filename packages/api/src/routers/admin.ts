@@ -31,7 +31,7 @@ const profileInput = z.object({
   pronouns: z.string().trim().max(40),
   introduction: z.string().trim().max(80),
   link: draftLink,
-  competencies: z.array(z.string().trim().min(1).max(40)).max(5),
+  competencies: z.array(z.string().trim().min(1).max(18)).max(5),
   stageColor: stageColorSchema.nullable(),
 });
 

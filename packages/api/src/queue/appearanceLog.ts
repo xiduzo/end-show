@@ -1,8 +1,11 @@
 import { db } from "@end-show/db";
 import { appearance } from "@end-show/db/schema/appearance";
-import { and, eq, gte, inArray, isNull, max, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, or } from "drizzle-orm";
 
 export type AppearanceSource = "kiosk" | "mobile" | "rotation";
+
+/** Rolling window for the Stage Time fairness signal (ADR-0011). */
+export const STAGE_TIME_WINDOW_MS = 60 * 60 * 1000;
 
 export type AppearanceRecord = {
   id: string;
@@ -28,8 +31,16 @@ export interface AppearanceLog {
     studentUserId: string,
     sinceMs: number,
   ): Promise<AppearanceRecord[]>;
-  /** Map of userId → last startedAt (ms). Missing entries = never appeared. */
-  lastStartedAtFor(studentUserIds: string[]): Promise<Map<string, number>>;
+  /**
+   * Sum of each Student's on-Stage time (ms) since `sinceMs`, across all Stages.
+   * Ongoing appearances count up to "now". Missing entries = zero.
+   * Drives the Stage Time fairness ranking (ADR-0011) used by Rotation pick
+   * and the Companion student list.
+   */
+  stageTimeIn(
+    studentUserIds: string[],
+    sinceMs: number,
+  ): Promise<Map<string, number>>;
 }
 
 export class DrizzleAppearanceLog implements AppearanceLog {
@@ -79,21 +90,31 @@ export class DrizzleAppearanceLog implements AppearanceLog {
     }));
   }
 
-  async lastStartedAtFor(
+  async stageTimeIn(
     studentUserIds: string[],
+    sinceMs: number,
   ): Promise<Map<string, number>> {
     const out = new Map<string, number>();
     if (studentUserIds.length === 0) return out;
+    const since = new Date(sinceMs);
     const rows = await db
-      .select({
-        studentUserId: appearance.studentUserId,
-        last: max(appearance.startedAt),
-      })
+      .select()
       .from(appearance)
-      .where(inArray(appearance.studentUserId, studentUserIds))
-      .groupBy(appearance.studentUserId);
+      .where(
+        and(
+          inArray(appearance.studentUserId, studentUserIds),
+          or(isNull(appearance.endedAt), gte(appearance.endedAt, since)),
+        ),
+      );
+    const now = Date.now();
     for (const r of rows) {
-      if (r.last) out.set(r.studentUserId, r.last.getTime());
+      const startedAtMs = r.startedAt.getTime();
+      const endedAtMs = r.endedAt?.getTime() ?? now;
+      const effStart = Math.max(startedAtMs, sinceMs);
+      const effEnd = Math.max(effStart, endedAtMs);
+      const ms = effEnd - effStart;
+      if (ms <= 0) continue;
+      out.set(r.studentUserId, (out.get(r.studentUserId) ?? 0) + ms);
     }
     return out;
   }
@@ -139,15 +160,22 @@ export class InMemoryAppearanceLog implements AppearanceLog {
     );
   }
 
-  async lastStartedAtFor(
+  async stageTimeIn(
     studentUserIds: string[],
+    sinceMs: number,
   ): Promise<Map<string, number>> {
     const want = new Set(studentUserIds);
     const out = new Map<string, number>();
+    const now = this.nowFn();
     for (const r of this.rows) {
       if (!want.has(r.studentUserId)) continue;
-      const prev = out.get(r.studentUserId) ?? 0;
-      if (r.startedAtMs > prev) out.set(r.studentUserId, r.startedAtMs);
+      const endedAtMs = r.endedAtMs ?? now;
+      if (endedAtMs < sinceMs) continue;
+      const effStart = Math.max(r.startedAtMs, sinceMs);
+      const effEnd = Math.max(effStart, endedAtMs);
+      const ms = effEnd - effStart;
+      if (ms <= 0) continue;
+      out.set(r.studentUserId, (out.get(r.studentUserId) ?? 0) + ms);
     }
     return out;
   }

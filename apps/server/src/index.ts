@@ -53,12 +53,15 @@ const websocket = createBunWSHandler({
   createContext: trpcCreateContext,
 });
 
-const ALLOWED_ORIGINS = env.CORS_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean);
+const ALLOWED_ORIGINS = env.CORS_ORIGIN.split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 function corsHeaders(origin: string | null): Record<string, string> {
-  const allow = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  const allow =
+    origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
   return {
-    "Access-Control-Allow-Origin": allow,
+    "Access-Control-Allow-Origin": allow ?? "",
     "Access-Control-Allow-Credentials": "true",
     Vary: "Origin",
   };
@@ -81,7 +84,8 @@ Bun.serve({
         headers: {
           ...corsHeaders(origin),
           "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type, Authorization, x-trpc-source",
+          "Access-Control-Allow-Headers":
+            "Content-Type, Authorization, x-trpc-source",
           "Access-Control-Max-Age": "86400",
         },
       });
@@ -101,4 +105,6 @@ Bun.serve({
   websocket,
 });
 
-console.log(`Server listening on http://localhost:${port} (tRPC at /trpc, WS at /trpc)`);
+console.log(
+  `Server listening on http://localhost:${port} (tRPC at /trpc, WS at /trpc)`,
+);

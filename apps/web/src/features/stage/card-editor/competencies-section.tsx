@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { Highlight } from "./highlight";
-import { COMP_MAX } from "./types";
+import { COMP_MAX, COMP_TAG_MAX } from "./types";
 
 export function CompetenciesSection({
   competencies,
@@ -113,7 +113,7 @@ export function CompetenciesSection({
                       : "type to add — or click a suggestion →"
                   }
                   className="flex-1 bg-transparent font-mono text-sm placeholder:text-lego-dark/30 focus:outline-none"
-                  maxLength={40}
+                  maxLength={COMP_TAG_MAX}
                 />
                 <span className="font-mono text-xs text-lego-dark/40">
                   {remaining} of {COMP_MAX} left

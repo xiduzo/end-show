@@ -73,9 +73,14 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
     [list],
   );
 
+  const isFiltering = search.length > 0 || selectedComps.length > 0;
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return list.filter((s) => {
+      // Stage Time fairness (ADR-0011): hide top-decile Students from the
+      // idle list. Any active filter / search restores them — intent wins.
+      if (!isFiltering && s.hideWhenIdle) return false;
       const text = [s.displayName, s.introduction, s.pronouns]
         .filter(Boolean)
         .join(" ")
@@ -86,9 +91,7 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
         s.competencies.some((c) => selectedComps.includes(c));
       return textOk && compOk;
     });
-  }, [list, search, selectedComps]);
-
-  const isFiltering = search.length > 0 || selectedComps.length > 0;
+  }, [list, search, selectedComps, isFiltering]);
 
   const fullQueue = useMemo(
     () => (queue?.items ?? []).map((i) => i.studentUserId),

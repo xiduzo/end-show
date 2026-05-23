@@ -122,14 +122,16 @@ export const assetRouter = router({
         replacedBytes = priorRows[0]?.bytes ?? 0;
       }
 
-      // Hard block on budget exceed.
-      const budget = await computeBudget(userId);
-      const effectiveRemaining = budget.remainingBytes + replacedBytes;
-      if (effectiveRemaining < input.bytes) {
-        throw new TRPCError({
-          code: "PAYLOAD_TOO_LARGE",
-          message: `Not enough storage. You have ${formatMB(effectiveRemaining)} free, this upload needs ${formatMB(input.bytes)}.`,
-        });
+      // Hard block on budget exceed — staff bypass for emergencies.
+      if (!isStaff(ctx)) {
+        const budget = await computeBudget(userId);
+        const effectiveRemaining = budget.remainingBytes + replacedBytes;
+        if (effectiveRemaining < input.bytes) {
+          throw new TRPCError({
+            code: "PAYLOAD_TOO_LARGE",
+            message: `Not enough storage. You have ${formatMB(effectiveRemaining)} free, this upload needs ${formatMB(input.bytes)}.`,
+          });
+        }
       }
 
       const assetId = crypto.randomUUID();

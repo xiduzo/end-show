@@ -17,19 +17,22 @@ export function PortraitColumn({
         <p className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
           portrait <span className="text-slide">*</span>
         </p>
-        {portraitUrl && !readOnly && (
-          <button
-            type="button"
-            onClick={onPick}
-            disabled={busy}
-            className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase hover:text-slide disabled:opacity-40"
-          >
-            {busy
-              ? progress > 0 && progress < 100
-                ? `${progress}%`
-                : "uploading…"
-              : "replace ↺"}
-          </button>
+        {!readOnly && busy ? (
+          <span className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
+            {progress > 0 && progress < 100 ? `${progress}%` : "uploading…"}
+          </span>
+        ) : (
+          portraitUrl &&
+          !readOnly && (
+            <button
+              type="button"
+              onClick={onPick}
+              disabled={busy}
+              className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase hover:text-slide disabled:opacity-40"
+            >
+              replace ↺
+            </button>
+          )
         )}
       </div>
       <div className="relative aspect-[3/4] overflow-hidden rounded-md border border-lego-dark/20 bg-lego-dark/[0.04]">
@@ -48,11 +51,23 @@ export function PortraitColumn({
           <button
             type="button"
             onClick={onPick}
-            className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[repeating-linear-gradient(135deg,rgba(1,1,45,0.04)_0_1px,transparent_1px_8px)] font-mono text-xs text-lego-dark/40"
+            disabled={busy}
+            className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[repeating-linear-gradient(135deg,rgba(1,1,45,0.04)_0_1px,transparent_1px_8px)] font-mono text-xs text-lego-dark/40 disabled:cursor-not-allowed"
           >
-            <span className="text-lg">↑</span>
-            <span>drag photo here</span>
-            <span>or click to browse</span>
+            {busy ? (
+              <>
+                <span className="text-2xl text-lego-dark/70">
+                  {progress > 0 && progress < 100 ? `${progress}%` : "…"}
+                </span>
+                <span>uploading</span>
+              </>
+            ) : (
+              <>
+                <span className="text-lg">↑</span>
+                <span>drag photo here</span>
+                <span>or click to browse</span>
+              </>
+            )}
           </button>
         )}
         {!portraitUrl && (

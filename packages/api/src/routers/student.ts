@@ -7,6 +7,10 @@ import { z } from "zod";
 
 import { getAssetStore } from "../assetStore";
 import { protectedProcedure, publicProcedure, router } from "../index";
+import {
+  STAGE_TIME_WINDOW_MS,
+  getAppearanceLog,
+} from "../queue/appearanceLog";
 
 export type StageColor = "slime" | "crayon" | "bubblegum";
 
@@ -21,7 +25,16 @@ export type StudentSummary = {
   workMediaUrl: string | null;
   workMediaKind: "work-image" | "work-video" | null;
   competencies: string[];
+  /** Sum of on-Stage ms in the last STAGE_TIME_WINDOW_MS. Populated by
+   *  listEligible; sentinel `0` from single-Student fetches. ADR-0011. */
+  stageTimeMs: number;
+  /** True when this Student sits in the top decile by Stage Time and should
+   *  be hidden from the Companion list while no filter is active. */
+  hideWhenIdle: boolean;
 };
+
+/** Fraction of the eligible cohort hidden from the Companion list when idle. */
+const COMPANION_HIDE_DECILE = 0.1;
 
 export type MyProfile = {
   userId: string;
@@ -52,6 +65,10 @@ const draftLink = z
   .string()
   .trim()
   .max(300)
+  .transform((v) => {
+    if (v === "") return "";
+    return /^https?:\/\//i.test(v) ? v : `https://${v}`;
+  })
   .refine((v) => v === "" || z.string().url().safeParse(v).success, {
     message: "Invalid URL",
   });
@@ -62,7 +79,7 @@ const profileInput = z.object({
   introduction: z.string().trim().max(80),
   link: draftLink,
   stageColor: stageColorSchema.nullable(),
-  competencies: z.array(z.string().trim().min(1).max(40)).max(5),
+  competencies: z.array(z.string().trim().min(1).max(18)).max(5),
 });
 
 export const studentRouter = router({
@@ -104,9 +121,34 @@ export const studentRouter = router({
         workMediaKind:
           work?.kind === "work-image" || work?.kind === "work-video" ? work.kind : null,
         competencies: byStudent.get(r.userId) ?? [],
+        stageTimeMs: 0,
+        hideWhenIdle: false,
       };
     });
-    return all.filter(isComplete);
+    const complete = all.filter(isComplete);
+
+    // Stage Time ranking (ADR-0011): least Stage Time first; hide the top
+    // decile from the Companion list while no filter is active.
+    const sinceMs = Date.now() - STAGE_TIME_WINDOW_MS;
+    const stageTime = await getAppearanceLog().stageTimeIn(
+      complete.map((s) => s.userId),
+      sinceMs,
+    );
+    for (const s of complete) {
+      s.stageTimeMs = stageTime.get(s.userId) ?? 0;
+    }
+    complete.sort((a, b) => a.stageTimeMs - b.stageTimeMs);
+
+    const hideCount = Math.floor(complete.length * COMPANION_HIDE_DECILE);
+    if (hideCount > 0) {
+      const firstHiddenIdx = complete.length - hideCount;
+      for (let i = firstHiddenIdx; i < complete.length; i += 1) {
+        if (complete[i]!.stageTimeMs > 0) {
+          complete[i]!.hideWhenIdle = true;
+        }
+      }
+    }
+    return complete;
   }),
 
   byUserId: publicProcedure
@@ -153,6 +195,8 @@ export const studentRouter = router({
           workRow?.kind === "work-image" || workRow?.kind === "work-video"
             ? workRow.kind
             : null,
+        stageTimeMs: 0,
+        hideWhenIdle: false,
       };
     }),
 

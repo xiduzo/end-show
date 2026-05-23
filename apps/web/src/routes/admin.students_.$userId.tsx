@@ -81,7 +81,6 @@ function AdminStudentEdit() {
                 createdAt: loan.createdAt,
                 lender: loan.lender,
               }}
-              readOnly
             />
           ))}
           {budget.data?.activeLent.map((loan) => (
@@ -95,7 +94,6 @@ function AdminStudentEdit() {
                 respondedAt: loan.respondedAt,
                 peer: loan.borrower,
               }}
-              readOnly
             />
           ))}
           {budget.data?.activeBorrowed.map((loan) => (
@@ -110,7 +108,6 @@ function AdminStudentEdit() {
                 respondedAt: loan.respondedAt,
                 peer: loan.lender,
               }}
-              readOnly
             />
           ))}
         </div>

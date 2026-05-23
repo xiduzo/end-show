@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
 import { TopBar } from "@/shell";
@@ -491,8 +492,8 @@ function AdminStudentsRoute() {
           </div>
         )}
 
-        <div className="mt-6 rounded-lg border border-ink/15 bg-white">
-          <div className="grid grid-cols-[40px_minmax(180px,1.6fr)_minmax(140px,1fr)_100px_minmax(140px,1fr)_minmax(160px,1fr)_120px_120px_40px] items-center gap-3 rounded-t-lg bg-lego px-4 py-3 text-xs tracking-[0.2em] uppercase text-chalkboard/70">
+        <div className="mt-6 overflow-x-auto rounded-lg border border-ink/15 bg-white">
+          <div className="grid min-w-[1200px] grid-cols-[40px_minmax(180px,1.6fr)_minmax(140px,1fr)_100px_minmax(140px,1fr)_minmax(160px,1fr)_120px_120px] items-center gap-3 rounded-t-lg bg-lego px-4 py-3 text-xs tracking-[0.2em] uppercase text-chalkboard/70">
             <input
               type="checkbox"
               checked={allOnPageSelected}
@@ -548,7 +549,6 @@ function AdminStudentsRoute() {
             >
               edited{arrow("edited")}
             </button>
-            <span />
           </div>
 
           {list.isLoading && (
@@ -755,8 +755,20 @@ function Row({
   selected: boolean;
   onToggleSelect: () => void;
 }) {
-  const [hoverComps, setHoverComps] = useState(false);
-  const [hoverShowcase, setHoverShowcase] = useState(false);
+  const compsRef = useRef<HTMLDivElement | null>(null);
+  const showcaseRef = useRef<HTMLDivElement | null>(null);
+  const [compsRect, setCompsRect] = useState<DOMRect | null>(null);
+  const [showcaseRect, setShowcaseRect] = useState<DOMRect | null>(null);
+
+  const openComps = () => {
+    if (compsRef.current) setCompsRect(compsRef.current.getBoundingClientRect());
+  };
+  const closeComps = () => setCompsRect(null);
+  const openShowcase = () => {
+    if (showcaseRef.current)
+      setShowcaseRect(showcaseRef.current.getBoundingClientRect());
+  };
+  const closeShowcase = () => setShowcaseRect(null);
 
   const compCount = row.competencies.length;
   const pct =
@@ -776,10 +788,7 @@ function Row({
           };
 
   return (
-    <li
-      className="relative grid grid-cols-[40px_minmax(180px,1.6fr)_minmax(140px,1fr)_100px_minmax(140px,1fr)_minmax(160px,1fr)_120px_120px_40px] items-center gap-3 px-4 py-3 text-sm hover:bg-ink/[0.02]"
-      style={hoverComps || hoverShowcase ? { zIndex: 40 } : undefined}
-    >
+    <li className="relative grid min-w-[1200px] grid-cols-[40px_minmax(180px,1.6fr)_minmax(140px,1fr)_100px_minmax(140px,1fr)_minmax(160px,1fr)_120px_120px] items-center gap-3 bg-white px-4 py-3 text-sm hover:bg-ink/[0.02]">
       <Link
         to="/admin/students/$userId"
         params={{ userId: row.userId }}
@@ -816,9 +825,10 @@ function Row({
       </div>
 
       <div
+        ref={compsRef}
         className="relative z-10 flex items-center gap-2"
-        onMouseEnter={() => setHoverComps(true)}
-        onMouseLeave={() => setHoverComps(false)}
+        onMouseEnter={openComps}
+        onMouseLeave={closeComps}
       >
         <div className="flex items-center gap-1 rounded-full border border-ink/15 bg-white px-2 py-1">
           <div className="flex gap-0.5">
@@ -836,35 +846,44 @@ function Row({
             {compCount}/5
           </span>
         </div>
-        {hoverComps && (
-          <div className="absolute left-0 top-full z-20 mt-2 w-max max-w-xs rounded-md bg-ink p-3 text-chalkboard shadow-lg">
-            <p className="text-xs tracking-widest uppercase text-chalkboard/60">
-              {compCount} of 5 competencies
-            </p>
-            {compCount > 0 ? (
-              <div className="mt-2 flex flex-wrap gap-1">
-                {row.competencies.map((c) => (
-                  <span
-                    key={c}
-                    className="rounded-full border border-chalkboard/30 px-2 py-0.5 text-xs"
-                  >
-                    {c}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-2 text-xs text-chalkboard/60 italic">
-                No competencies selected yet.
+        {compsRect &&
+          createPortal(
+            <div
+              className="pointer-events-none fixed z-50 w-max max-w-xs rounded-md bg-ink p-3 text-chalkboard shadow-lg"
+              style={{
+                top: compsRect.bottom + 8,
+                left: compsRect.left,
+              }}
+            >
+              <p className="text-xs tracking-widest uppercase text-chalkboard/60">
+                {compCount} of 5 competencies
               </p>
-            )}
-          </div>
-        )}
+              {compCount > 0 ? (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {row.competencies.map((c) => (
+                    <span
+                      key={c}
+                      className="rounded-full border border-chalkboard/30 px-2 py-0.5 text-xs"
+                    >
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-chalkboard/60 italic">
+                  No competencies selected yet.
+                </p>
+              )}
+            </div>,
+            document.body,
+          )}
       </div>
 
       <div
+        ref={showcaseRef}
         className="relative z-10"
-        onMouseEnter={() => setHoverShowcase(true)}
-        onMouseLeave={() => setHoverShowcase(false)}
+        onMouseEnter={openShowcase}
+        onMouseLeave={closeShowcase}
       >
         {row.workMediaKind ? (
           <span
@@ -885,26 +904,35 @@ function Row({
             —
           </span>
         )}
-        {hoverShowcase && row.workMediaUrl && (
-          <div className="absolute left-0 top-full z-20 mt-2 w-64 overflow-hidden rounded-md border border-ink/20 bg-ink p-1 shadow-lg">
-            {row.workMediaKind === "work-video" ? (
-              <video
-                src={row.workMediaUrl}
-                muted
-                autoPlay
-                loop
-                playsInline
-                className="h-36 w-full rounded object-cover"
-              />
-            ) : (
-              <img
-                src={row.workMediaUrl}
-                alt={`${row.displayName || row.name} showcase`}
-                className="h-36 w-full rounded object-cover"
-              />
-            )}
-          </div>
-        )}
+        {showcaseRect &&
+          row.workMediaUrl &&
+          createPortal(
+            <div
+              className="pointer-events-none fixed z-50 w-64 overflow-hidden rounded-md border border-ink/20 bg-ink p-1 shadow-lg"
+              style={{
+                top: showcaseRect.bottom + 8,
+                left: showcaseRect.left,
+              }}
+            >
+              {row.workMediaKind === "work-video" ? (
+                <video
+                  src={row.workMediaUrl}
+                  muted
+                  autoPlay
+                  loop
+                  playsInline
+                  className="h-36 w-full rounded object-cover"
+                />
+              ) : (
+                <img
+                  src={row.workMediaUrl}
+                  alt={`${row.displayName || row.name} showcase`}
+                  className="h-36 w-full rounded object-cover"
+                />
+              )}
+            </div>,
+            document.body,
+          )}
       </div>
 
       <div className="truncate">
@@ -954,10 +982,6 @@ function Row({
       </div>
 
       <div className="text-xs text-ink/60">{relativeTime(row.updatedAt)}</div>
-
-      <div className="flex justify-end text-ink/40" aria-hidden>
-        ›
-      </div>
     </li>
   );
 }

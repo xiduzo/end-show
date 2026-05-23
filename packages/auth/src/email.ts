@@ -47,14 +47,14 @@ export async function sendStudentInviteEmail(args: {
 }) {
   const host = getWebHost();
   const profileUrl = `${host}/profile`;
-  const subject = "You're invited to the End Show";
+  const subject = "You are invited to the End Show!";
   const text = `Hi ${args.name},
 
-You've been invited to the End Show. Sign in with your email at ${host} and fill in your profile here: ${profileUrl}
+Fill your profile via ${profileUrl}.
 
 See you there.`;
   const html = `<p>Hi ${escapeHtml(args.name)},</p>
-<p>You've been invited to the End Show. Sign in with your email at <a href="${host}">${host}</a> and fill in your profile here:</p>
+<p>You've been invited to the End Show. Sign in with your email at <a href="${host}/login">${host}/login</a> and fill in your profile here:</p>
 <p><a href="${profileUrl}" style="display:inline-block;padding:10px 16px;background:#111;color:#fff;text-decoration:none;border-radius:6px">Fill in your profile</a></p>
 <p>Or open: <a href="${profileUrl}">${profileUrl}</a></p>`;
 

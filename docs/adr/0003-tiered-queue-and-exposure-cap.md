@@ -1,5 +1,7 @@
 # Tiered Queue with priority sources and Exposure Cap
 
+**Status:** Superseded by [ADR-0011](0011-fairness-via-stage-time-ranking.md). The Exposure Cap is removed; Companion preempt of the current Student is now allowed and additive; fairness moves to soft Stage-Time-based rankings on Rotation pick and the Companion student list. The three-tier Queue (Kiosk → Mobile → Rotation) from this ADR stands. Retained for historical context.
+
 The Stage advances by consuming from a **three-tier source hierarchy**: Kiosk Companion Queue first, Mobile Companion Queue second, Rotation third. A single per-Student **Exposure Cap** (3 minutes per rolling 60 minutes, equivalent to 6 appearances) applies across all three sources to prevent any one Student from dominating the show.
 
 ## Why this shape

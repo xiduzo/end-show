@@ -51,6 +51,7 @@ export function UploadWidget({
         const xhr = new XMLHttpRequest();
         xhr.open("PUT", uploadUrl);
         xhr.setRequestHeader("Content-Type", file.type);
+        xhr.setRequestHeader("Cache-Control", "public, max-age=31536000, immutable");
         xhr.upload.onprogress = (ev) => {
           if (ev.lengthComputable) {
             setProgress(Math.round((ev.loaded / ev.total) * 100));

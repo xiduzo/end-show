@@ -138,7 +138,7 @@ export const budgetRouter = router({
         const b = await computeBudget(p.id);
         const spareBytes = Math.max(
           0,
-          b.effectiveBudgetBytes - TRANSFER_FLOOR_BYTES,
+          b.effectiveBudgetBytes - b.usedBytes - TRANSFER_FLOOR_BYTES,
         );
         return {
           id: p.id,
@@ -147,6 +147,7 @@ export const budgetRouter = router({
           displayName: p.displayName ?? "",
           effectiveBytes: b.effectiveBudgetBytes,
           usedBytes: b.usedBytes,
+          floorBytes: TRANSFER_FLOOR_BYTES,
           spareBytes,
         };
       }),
@@ -187,7 +188,10 @@ export const budgetRouter = router({
         });
       }
       const lenderBudget = await computeBudget(input.fromUserId);
-      const lenderAfter = lenderBudget.effectiveBudgetBytes - input.bytes;
+      const lenderAfter =
+        lenderBudget.effectiveBudgetBytes -
+        lenderBudget.usedBytes -
+        input.bytes;
       if (lenderAfter < TRANSFER_FLOOR_BYTES) {
         throw new TRPCError({
           code: "BAD_REQUEST",

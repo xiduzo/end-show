@@ -1,6 +1,10 @@
 import { Queuer } from "@tanstack/pacer";
 
-import { type AppearanceSource, getAppearanceLog } from "./appearanceLog";
+import {
+  type AppearanceSource,
+  STAGE_TIME_WINDOW_MS,
+  getAppearanceLog,
+} from "./appearanceLog";
 
 type Tier = "kiosk" | "mobile";
 type QueueSource = "kiosk" | "mobile" | "rotation" | "resume";
@@ -47,8 +51,8 @@ type ChannelState = {
 
 const DWELL_MS = Number(process.env.DWELL_MS ?? 30000);
 const MIN_QUEUE = 3;
-/** Random pick happens within the N most-overdue students. Bigger = feels
- *  more random, smaller = stricter fairness. 1 = pure least-recently-seen. */
+/** Random pick happens within the N least-Stage-Time students. Bigger = feels
+ *  more random, smaller = stricter fairness. 1 = pure least Stage Time first. */
 const ROTATION_WINDOW = 12;
 
 const PRIORITY = {
@@ -151,12 +155,13 @@ async function nextRotationCandidate(ch: ChannelState): Promise<string | null> {
   const pool = eligible.filter((id) => !exclude.has(id));
   if (pool.length === 0) return null;
 
-  // Sort by least-recently-seen (never-seen = oldest), then pick randomly
-  // within the top ROTATION_WINDOW. Fair-bounded but not robotic.
-  const lastSeen = await getAppearanceLog().lastStartedAtFor(pool);
+  // Sort by ascending Stage Time over the rolling window (never-shown = 0 = top),
+  // then pick randomly within the top ROTATION_WINDOW. ADR-0011.
+  const sinceMs = Date.now() - STAGE_TIME_WINDOW_MS;
+  const stageTime = await getAppearanceLog().stageTimeIn(pool, sinceMs);
   const scored = pool
-    .map((id) => ({ id, last: lastSeen.get(id) ?? 0 }))
-    .sort((a, b) => a.last - b.last);
+    .map((id) => ({ id, ms: stageTime.get(id) ?? 0 }))
+    .sort((a, b) => a.ms - b.ms);
 
   const window = Math.min(scored.length, ROTATION_WINDOW);
   return scored[Math.floor(Math.random() * window)]!.id;

@@ -101,6 +101,9 @@ export function CardEditor({
       await onSave(next);
       setSavedAt(Date.now());
       dirtyRef.current = false;
+      qc.invalidateQueries({
+        queryKey: trpc.student.cohortTags.queryKey(),
+      });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
     } finally {

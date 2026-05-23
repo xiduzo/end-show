@@ -47,27 +47,30 @@ Pairing is the only coordination contract between a Companion and a Stage. The s
 ### Queue
 The ordered list of Students waiting to appear on a Stage. Queues are **scoped by Stage Code**.
 
-Queues partition by Stage Code (or by absence of one — the default channel is its own partition). A Queue is logically two tiers, consumed by Stage advance in this order:
+Queues partition by Stage Code (or by absence of one — the default channel is its own partition). A Queue is logically three sources, consumed by Stage advance in this order:
 
 1. **Kiosk Queue** — entries pushed by the paired Kiosk Companion. Consumed first.
 2. **Mobile Queue** — entries pushed by Mobile Companions. Consumed only when the Kiosk Queue is empty.
-3. **Rotation** — fallback. Selects an eligible Student when both tiers are empty.
+3. **Rotation** — fallback. Selects an eligible Student when both tiers are empty. Selection is governed by **Stage Time** ranking (below).
+
+A Companion tap on a Student may also **preempt** the Student currently on Stage; the preempted Student returns to the top of the Queue with resume priority and plays again after the newcomer's Dwell. See [ADR-0011](docs/adr/0011-fairness-via-stage-time-ranking.md).
 
 The Queue is the single coordination point between Companions and Stage(s) — there is no direct Companion-to-Stage channel.
 
-### Exposure Cap
-A per-Student rate limit on how often a Student may appear on Stage within a rolling time window.
+### Stage Time
+The sum of a Student's appearance durations on Stage, across **all Stages**, in the last rolling 60 minutes. Computed from the [Appearance Log](#appearance-log).
 
-- **Limit**: 3 minutes of total Stage time per Student per rolling 60 minutes (with the 30s Dwell, equivalent to 6 appearances).
-- **Scope**: counts *all* appearances regardless of source — Kiosk Companion, Mobile Companion, and Rotation alike. A single global counter per Student.
-- **Enforcement**: two checkpoints.
-  1. **At enqueue**: if a Companion taps a Student already at cap, the request is rejected with a message indicating when the Student becomes eligible again.
-  2. **At Stage advance**: if a queued (or rotation-selected) Student has hit cap between enqueue and consumption, the Stage silently skips them and falls through to the next eligible source.
+Stage Time is the single fairness signal in the system. It is **not** a cap — it never blocks a Companion tap and never causes Stage advance to skip a Student. It is consumed by two soft rankings:
+
+1. **Rotation pick** — the rotation pool is sorted by ascending Stage Time, then a random pick is made within the top-N most-overdue window.
+2. **Companion student list** — sorted by ascending Stage Time. When no search query or filter is active in the Companion UI, the top decile (≈10% most-shown Students) is hidden so casual browsing surfaces variety. The moment the visitor types a search or applies a filter, the hide flips off and every eligible Student is shown — intent overrides fairness.
+
+The 60-minute window matches the show's pacing: a Student's burst of attention naturally ages out within an hour, and the ranking has no discrete "now eligible again" boundary.
 
 ### Rotation
 The automatic refill of the Queue when both Kiosk and Mobile tiers are empty. Ensures the Stage never goes blank.
 
-Selection strategy: **shuffled round-robin** — shuffle the eligible Student set once, walk through the shuffled order, reshuffle when exhausted. Guarantees every eligible Student appears once per cycle while still feeling unordered to viewers.
+Selection strategy: sort the eligible Student pool by ascending **Stage Time**, then pick randomly within the top-N most-overdue window. Bigger N = feels more random, smaller N = stricter fairness; N=1 would be pure least-Stage-Time-first. Never-appeared Students rank as zero Stage Time and therefore surface first.
 
 ### Dwell
 The fixed time a Student is shown on Stage before the Stage advances. The same Dwell applies whether the next Student came from a Companion tap or from Rotation — there is one Stage clock, not two. Initial value: 30 seconds. Treated as a single system-wide setting, not per-Student.
@@ -75,10 +78,11 @@ The fixed time a Student is shown on Stage before the Stage advances. The same D
 ### Appearance Log
 The durable record of every time a Student has appeared on a Stage. Each entry captures `studentUserId`, `stageCode`, `source` (kiosk / mobile / rotation), `startedAt`, and `endedAt` (null while currently on Stage).
 
-The Appearance Log is the **only persistent piece** of the otherwise in-memory Queue subsystem (see [ADR-0007](docs/adr/0007-in-memory-queue-with-persistent-appearance-log.md)). Two consumers:
+The Appearance Log is the **only persistent piece** of the otherwise in-memory Queue subsystem (see [ADR-0007](docs/adr/0007-in-memory-queue-with-persistent-appearance-log.md)). Three consumers:
 
-1. **Exposure Cap** — reads recent entries to compute used-ms in the rolling 60-minute window.
-2. **Stage advance** — writes a new entry when a Student takes the Stage, and ends it when the Stage advances past them.
+1. **Stage Time ranking** — reads recent entries to compute per-Student Stage Time in the rolling 60-minute window, used by both the Rotation pick and the Companion student list (see [ADR-0011](docs/adr/0011-fairness-via-stage-time-ranking.md)).
+2. **Stage advance** — writes a new entry when a Student takes the Stage, and ends it when the Stage advances past them (including when a Companion preempt closes the current entry early).
+3. **Post-show analytics** — durable record of who appeared, when, where, and via which source.
 
 The Appearance Log is the seam at which the Queue subsystem meets durable storage; nothing else in the Queue subsystem touches the database.
 
@@ -105,10 +109,12 @@ Watching the Stage and using either Companion (Kiosk or Mobile) requires **no lo
 
 ## Queue rules
 
-- **Insert**: Companion tap appends the Student to the tail of the Queue scoped to that Companion's Stage Code (FIFO).
-- **Promotion only, no interruption**: Companion taps cannot pre-empt the Student currently on Stage. The current Student always finishes their Dwell.
+- **Insert**: Companion tap appends the Student to the tail of the Queue scoped to that Companion's Stage Code (FIFO within tier).
+- **Preempt**: a Companion tap on a Student *not* currently on Stage **preempts** whoever is on Stage. The current Student's Appearance is closed, they re-enter the Queue at top with resume priority, and the newly-tapped Student takes the Stage immediately. The preempted Student plays again after the newcomer's Dwell — preempt is therefore *additive* to total show time for whoever Companions push.
+- **Extend**: a Companion tap on the Student *already* on Stage extends that Student's Dwell (resets the Dwell timer); no preempt, no re-queue.
 - **Dedupe in-flight**: a Student already present in the Queue cannot be added again. Once that Student has been consumed (shown on Stage and advanced past), they become eligible to be queued again.
 - **Empty Queue**: when the Queue is empty at Stage-advance time, Rotation chooses the next Student.
+- **No fairness gating**: fairness lives in *rankings* (Rotation pick, Companion list), never in *gates*. No tap is rejected for fairness reasons; no queued Student is silently skipped. See [Stage Time](#stage-time).
 
 ## Deployment
 
@@ -116,7 +122,7 @@ Hosted application on the public internet — not a venue-local LAN deploy. The 
 
 ## Lifecycle
 
-The system is **always-on**. There is no Show domain entity, no scheduled start/end, no staff "reset" action in v1. The Exposure Cap's 60-minute rolling window ages out old appearances naturally.
+The system is **always-on**. There is no Show domain entity, no scheduled start/end, no staff "reset" action in v1. The Stage Time ranking's 60-minute rolling window ages out old appearances naturally.
 
 ### Stage empty state
 When zero Students are eligible (i.e. no Student has both `isPublished = true` and a complete profile), the Stage shows a dedicated **empty state** view (branded idle screen). Expected to be rare — only between system bring-up and the first Student publishing.

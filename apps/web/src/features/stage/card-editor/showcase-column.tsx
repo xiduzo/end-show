@@ -21,14 +21,18 @@ export function ShowcaseColumn({
         <p className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
           showcase work <span className="text-slide">*</span>
         </p>
-        {workMediaUrl && !readOnly ? (
+        {!readOnly && busy ? (
+          <span className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
+            {progress > 0 && progress < 100 ? `${progress}%` : "uploading…"}
+          </span>
+        ) : workMediaUrl && !readOnly ? (
           <button
             type="button"
             onClick={onPick}
             disabled={busy}
             className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase hover:text-slide disabled:opacity-40"
           >
-            {busy ? `${progress}%` : "replace ↺"}
+            replace ↺
           </button>
         ) : (
           <p className="font-mono text-xs text-lego-dark/40">
@@ -65,11 +69,23 @@ export function ShowcaseColumn({
           <button
             type="button"
             onClick={onPick}
-            className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.04)_0_1px,transparent_1px_8px)] font-mono text-xs text-chalkboard/60"
+            disabled={busy}
+            className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[repeating-linear-gradient(135deg,rgba(255,255,255,0.04)_0_1px,transparent_1px_8px)] font-mono text-xs text-chalkboard/60 disabled:cursor-not-allowed"
           >
-            <span className="text-lg">↑</span>
-            <span>drop an image or video here</span>
-            <span className="text-chalkboard/40">we figure out the rest</span>
+            {busy ? (
+              <>
+                <span className="text-2xl text-chalkboard">
+                  {progress > 0 && progress < 100 ? `${progress}%` : "…"}
+                </span>
+                <span>uploading</span>
+              </>
+            ) : (
+              <>
+                <span className="text-lg">↑</span>
+                <span>drop an image or video here</span>
+                <span className="text-chalkboard/40">we figure out the rest</span>
+              </>
+            )}
           </button>
         )}
       </div>

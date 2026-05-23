@@ -62,7 +62,7 @@ function RequestStep({ onSent }: { onSent: (email: string) => void }) {
         return;
       }
       onSent(value.email);
-      toast.success("Code sent — check email (or server log in dev)");
+      toast.success("Code sent — check your email");
     },
     validators: {
       onSubmit: z.object({ email: z.email("Invalid email address") }),
@@ -372,13 +372,13 @@ function KioskFooter({ step }: { step: Step }) {
           className="text-lego-dark/70 hover:text-lego-dark mt-4 w-full text-center font-mono text-sm"
         >
           not trying to sign in,{" "}
-          <span className="bg-slime text-lego-dark px-1 font-bold">
+          <span className="bg-slime text-lego-dark px-1 font-bold inline-block hover:cursor-pointer hover:scale-105 transition-all">
             go back
           </span>
         </button>
       ) : (
         <p className="text-lego-dark/55 mt-4 text-center font-mono text-xs">
-          a fresh code is good for {Math.floor(OTP_TTL_SECONDS / 60)} minutes.
+          Not receiving the mail? Ask your teachers!
         </p>
       )}
     </div>

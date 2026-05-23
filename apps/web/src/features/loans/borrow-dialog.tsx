@@ -207,27 +207,46 @@ export function BorrowDialog({ onClose }: { onClose: () => void }) {
                     </span>
                     <span
                       className="relative flex h-2 w-20 shrink-0 overflow-hidden rounded-full bg-lego-dark/10"
-                      title={`${shortMB(p.usedBytes)} used + ${shortMB(bytes)} request of ${shortMB(p.effectiveBytes)} total`}
+                      title={`${shortMB(p.usedBytes)} used · ${shortMB(p.floorBytes)} reserved floor · ${shortMB(p.spareBytes)} lendable · request ${shortMB(bytes)}`}
                     >
-                      <span
-                        className="block h-full bg-lego-dark/40"
-                        style={{
-                          width: `${Math.min(100, (p.usedBytes / Math.max(1, p.effectiveBytes)) * 100)}%`,
-                        }}
-                      />
-                      <span
-                        className={cn(
-                          "block h-full",
-                          !ok
-                            ? "bg-crayon/60"
-                            : isSelected
-                              ? "bg-slide"
-                              : "bg-lego-dark/60",
-                        )}
-                        style={{
-                          width: `${Math.min(100 - Math.min(100, (p.usedBytes / Math.max(1, p.effectiveBytes)) * 100), (bytes / Math.max(1, p.effectiveBytes)) * 100)}%`,
-                        }}
-                      />
+                      {(() => {
+                        const total = Math.max(1, p.effectiveBytes);
+                        const usedPct = Math.min(
+                          100,
+                          (p.usedBytes / total) * 100,
+                        );
+                        const floorPct = Math.min(
+                          100 - usedPct,
+                          (p.floorBytes / total) * 100,
+                        );
+                        const reqPct = Math.min(
+                          100 - usedPct - floorPct,
+                          (bytes / total) * 100,
+                        );
+                        return (
+                          <>
+                            <span
+                              className="block h-full bg-lego-dark/40"
+                              style={{ width: `${usedPct}%` }}
+                            />
+                            <span
+                              className="block h-full bg-lego-dark/20 [background-image:repeating-linear-gradient(45deg,transparent_0_2px,rgba(0,0,0,0.15)_2px_4px)]"
+                              style={{ width: `${floorPct}%` }}
+                            />
+                            <span
+                              className={cn(
+                                "block h-full",
+                                !ok
+                                  ? "bg-crayon/60"
+                                  : isSelected
+                                    ? "bg-slide"
+                                    : "bg-lego-dark/60",
+                              )}
+                              style={{ width: `${reqPct}%` }}
+                            />
+                          </>
+                        );
+                      })()}
                     </span>
                     <span
                       className={cn(

@@ -80,7 +80,9 @@ export function Polaroid({
             <img
               src={student.portraitUrl}
               alt={student.displayName}
-              className="h-full w-full object-cover"
+              draggable={false}
+              className="pointer-events-none h-full w-full select-none object-cover"
+              style={{ touchAction: "none" }}
             />
           ) : (
             <span className="absolute inset-0 flex items-center justify-center font-mono text-xs tracking-widest text-chalkboard/30">

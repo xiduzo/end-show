@@ -48,7 +48,6 @@ export function WallShowcase({
   const sticker = STICKER_TONES[hash(competency ?? "x") % STICKER_TONES.length];
   const stickerTilt = rand(seed, 4) * 6;
   const stickerLeft = 12 + rand(seed, 5) * 14;
-  const pinOffsetPx = rand(seed, 8) * 12;
 
   // image source position inside the source card
   const sourceImageLeft = sourceImageRect.x - sourceCardRect.x;
@@ -164,27 +163,6 @@ export function WallShowcase({
             {competency}
           </span>
         )}
-
-        <motion.div
-          aria-hidden
-          className="absolute top-2 z-20 h-4 w-4 -translate-x-1/2 rounded-full"
-          initial={{
-            left: sourceImageLeft + sourceImageRect.width / 2 + pinOffsetPx,
-          }}
-          animate={{
-            left: layout.imagePadding + targetImageW / 2 + pinOffsetPx,
-          }}
-          exit={{
-            left: sourceImageLeft + sourceImageRect.width / 2 + pinOffsetPx,
-          }}
-          transition={spring}
-          style={{
-            background:
-              "radial-gradient(circle at 35% 30%, #ff8a6a 0%, #ff5b23 45%, #b8350f 100%)",
-            boxShadow:
-              "0 2px 3px rgba(0,0,0,0.45), inset -1px -1px 2px rgba(0,0,0,0.35), inset 1px 1px 1.5px rgba(255,255,255,0.6)",
-          }}
-        />
 
         <motion.div
           className="absolute overflow-hidden"

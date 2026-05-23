@@ -112,13 +112,19 @@ function StageRoute() {
     else if (!current) setDisplayedNext(null);
   }, [next, current]);
 
+  // Keep the last student mounted so swaps crossfade inside StageCard rather
+  // than remounting (which would briefly expose the page background). Only
+  // clear when the backend reports a genuinely idle stage.
+  const [shown, setShown] = useState<StudentSummary | null>(null);
+  useEffect(() => {
+    if (current) setShown(current);
+    else if (snap && !snap.current) setShown(null);
+  }, [current, snap]);
+
   return (
     <div className="relative h-full overflow-hidden">
-      {current ? (
-        <StageCard
-          key={`${current.userId}:${snap?.current?.startedAt ?? 0}`}
-          student={current}
-        />
+      {shown ? (
+        <StageCard student={shown} />
       ) : (
         <div className="bg-lego relative h-full w-full overflow-hidden text-chalkboard">
           <BackgroundDecor />

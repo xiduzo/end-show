@@ -31,6 +31,12 @@ export function createDb() {
       : undefined,
   });
 
+  // libsql's local (file:) client defaults foreign_keys OFF, so ON DELETE
+  // cascade never fires and parent deletes orphan child rows. Enable it once;
+  // the pragma is queued first on the connection and persists for its lifetime.
+  // (Remote sqld/Turso enforces foreign keys server-side by default.)
+  void client.execute("PRAGMA foreign_keys = ON");
+
   return drizzle({ client, schema });
 }
 

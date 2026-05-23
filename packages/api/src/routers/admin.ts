@@ -379,6 +379,8 @@ export const adminRouter = router({
           console.warn("[admin] r2 delete failed", e);
         }
       }
+      // foreign_keys is ON (see createDb), so deleting the user cascades to
+      // student, asset, studentCompetency, appearance and budgetLoan.
       await db.delete(user).where(inArray(user.id, studentIds));
       for (const id of studentIds) emitStudentUpdate(id);
       return { removed: studentIds.length };

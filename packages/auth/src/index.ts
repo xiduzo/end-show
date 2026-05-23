@@ -5,6 +5,8 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP } from "better-auth/plugins/email-otp";
 
+import { sendEmail } from "./email";
+
 type OtpType = "sign-in" | "email-verification" | "forget-password";
 
 const SUBJECTS: Record<OtpType, string> = {
@@ -19,35 +21,10 @@ async function sendOtpEmail(args: {
   type: OtpType;
 }) {
   const { email, otp, type } = args;
-
-  if (!env.RESEND_API_KEY) {
-    console.log(`[auth][otp] type=${type} email=${email} otp=${otp}`);
-    return;
-  }
-
   const subject = SUBJECTS[type] ?? "Your verification code";
   const text = `Your code is ${otp}. It expires in 10 minutes.`;
   const html = `<p>Your code is <strong style="font-size:18px;letter-spacing:2px">${otp}</strong>.</p><p>It expires in 10 minutes.</p>`;
-
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: env.RESEND_FROM,
-      to: [email],
-      subject,
-      text,
-      html,
-    }),
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Resend send failed: ${res.status} ${body}`);
-  }
+  await sendEmail({ to: email, subject, text, html });
 }
 
 export function createAuth() {

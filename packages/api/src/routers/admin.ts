@@ -1,3 +1,4 @@
+import { sendStudentInviteEmail } from "@end-show/auth/email";
 import { db } from "@end-show/db";
 import { asset, budgetLoan } from "@end-show/db/schema/asset";
 import { user } from "@end-show/db/schema/auth";
@@ -336,6 +337,11 @@ export const adminRouter = router({
         role: "student",
       });
       await db.insert(student).values({ userId });
+      try {
+        await sendStudentInviteEmail({ to: input.email, name: input.name });
+      } catch (e) {
+        console.warn("[admin] invite email failed", e);
+      }
       return { userId };
     }),
 

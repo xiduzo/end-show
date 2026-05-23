@@ -2,6 +2,7 @@
   "extends": "@end-show/config/tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
+    "noEmit": false,
     "outDir": "dist",
     "paths": {
       "@/*": ["./src/*"]

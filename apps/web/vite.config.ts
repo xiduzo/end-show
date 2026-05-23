@@ -31,7 +31,7 @@ export default defineConfig({
         display: "standalone",
       },
       pwaAssets: { disabled: false, config: true },
-      devOptions: { enabled: true },
+      devOptions: { enabled: false },
       workbox: {
         navigateFallbackDenylist: [/^\/trpc/],
         runtimeCaching: [

@@ -9,6 +9,7 @@ dist
 build
 *.tsbuildinfo
 apps/**/*.js
+packages/**/*.js
 
 # Environment variables
 .env

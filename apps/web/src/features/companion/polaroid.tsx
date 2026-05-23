@@ -1,5 +1,6 @@
 import type { StudentSummary } from "@end-show/api/routers/student";
 import { cn } from "@end-show/ui/lib/utils";
+import { motion } from "motion/react";
 
 import { STAGE_PALETTE } from "@/features/stage";
 import { DEFAULT_ACCENT, hash, initials, rand, STICKER_TONES } from "./wonk";
@@ -8,11 +9,13 @@ export function Polaroid({
   student,
   focused,
   width,
+  developDelay,
 }: {
   student: StudentSummary;
   focused: boolean;
   queued: boolean;
   width: number;
+  developDelay?: number;
 }) {
   const seed = hash(student.userId);
   const palette = student.stageColor
@@ -22,7 +25,6 @@ export function Polaroid({
   const sticker = STICKER_TONES[hash(competency ?? "x") % STICKER_TONES.length];
   const stickerTilt = rand(seed, 4) * 14;
   const stickerLeft = 12 + rand(seed, 5) * 18;
-  const pinOffsetPx = rand(seed, 8) * 12;
   const captionTilt = rand(seed, 7) * 2.5;
 
   return (
@@ -51,29 +53,34 @@ export function Polaroid({
           </span>
         )}
 
-        <div
-          aria-hidden
-          className="absolute top-2 z-10 h-4 w-4 -translate-x-1/2 rounded-full"
-          style={{
-            left: `calc(50% + ${pinOffsetPx}px)`,
-            background:
-              "radial-gradient(circle at 35% 30%, #ff8a6a 0%, #ff5b23 45%, #b8350f 100%)",
-            boxShadow:
-              "0 2px 3px rgba(0,0,0,0.45), inset -1px -1px 2px rgba(0,0,0,0.35), inset 1px 1px 1.5px rgba(255,255,255,0.6)",
-          }}
-        >
-          <span
-            aria-hidden
-            className="absolute h-1 w-1 rounded-full bg-chalkboard/80"
-            style={{ top: "22%", left: "28%" }}
-          />
-        </div>
-
-        <div
+        <motion.div
           data-polaroid-image
           className="relative aspect-[3/4] w-full overflow-hidden"
           style={{
             background: `radial-gradient(circle at 50% 55%, ${palette.accent}aa 0%, ${palette.dark} 78%)`,
+            willChange: "filter",
+          }}
+          initial={
+            developDelay !== undefined
+              ? {
+                  filter:
+                    "brightness(2.4) contrast(0.15) saturate(0) hue-rotate(195deg) blur(3px)",
+                }
+              : false
+          }
+          animate={{
+            filter: [
+              "brightness(2.4) contrast(0.15) saturate(0) hue-rotate(195deg) blur(2px)",
+              "brightness(1.9) contrast(0.35) saturate(0.25) hue-rotate(170deg) blur(1px)",
+              "brightness(1.45) contrast(0.65) saturate(0.6) hue-rotate(60deg) blur(0.6px)",
+              "brightness(1) contrast(1) saturate(1) hue-rotate(0deg) blur(0px)",
+            ],
+          }}
+          transition={{
+            duration: 1.4,
+            times: [0, 0.25, 0.6, 1],
+            ease: "easeInOut",
+            delay: developDelay ?? 0,
           }}
         >
           {student.portraitUrl ? (
@@ -89,7 +96,7 @@ export function Polaroid({
               {initials(student.displayName)}
             </span>
           )}
-        </div>
+        </motion.div>
 
         <p
           className={cn(

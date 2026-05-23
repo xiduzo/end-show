@@ -61,6 +61,17 @@ function isComplete(s: Omit<StudentSummary, "portraitUrl" | "workMediaUrl" | "wo
 
 const stageColorSchema = z.enum(["slime", "crayon", "bubblegum"]);
 
+const STAGE_COLORS: readonly StageColor[] = ["slime", "crayon", "bubblegum"];
+
+export function defaultStageColor(seed: string): StageColor {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return STAGE_COLORS[h % STAGE_COLORS.length]!;
+}
+
 export const draftLink = z
   .string()
   .trim()

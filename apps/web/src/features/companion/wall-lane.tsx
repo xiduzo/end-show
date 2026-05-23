@@ -1,5 +1,6 @@
 import type { StudentSummary } from "@end-show/api/routers/student";
 import { useHotkey } from "@tanstack/react-hotkeys";
+import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Polaroid } from "./polaroid";
@@ -296,13 +297,15 @@ export function WallLane({
           Array.from({ length: slots }).map((_, i) => {
             const s = students[i % N];
             const slotKey = `${copy}-${i}-${s.userId}`;
+            const wrapperKey = `${copy}-${i}`;
             const isThrown = throws.some((t) => t.slotKey === slotKey);
             const otherCopyThrowing =
               !isThrown && throws.some((t) => t.studentId === s.userId);
             const hidden = showcasedId === s.userId || otherCopyThrowing;
             const baseX = copy * TRACK_W + i * SPACING + SPACING / 2;
-            // Per-slot stable wonk so each copy looks different
-            const seed = hash(`${s.userId}::${i}`);
+            // Per-slot stable wonk — independent of student so swapping
+            // students on filter doesn't jitter position/rotation.
+            const seed = hash(`slot::${copy}-${i}`);
             const yJitter = rand(seed, 11) * (size.h ? size.h * 0.06 : 24);
             const rot = rand(seed, 12) * 4;
             const widthMul = 0.95 + (rand(seed, 13) * 0.5 + 0.5) * 0.1; // 0.95–1.05
@@ -315,7 +318,7 @@ export function WallLane({
               : undefined;
             return (
               <div
-                key={slotKey}
+                key={wrapperKey}
                 data-card-wrapper=""
                 data-slot-key={slotKey}
                 data-student-id={s.userId}
@@ -345,12 +348,39 @@ export function WallLane({
                   }}
                   className="block cursor-pointer focus:outline-none"
                 >
-                  <Polaroid
-                    student={s}
-                    focused={false}
-                    queued={inFlight.has(s.userId)}
-                    width={cardW}
-                  />
+                  <AnimatePresence mode="popLayout" initial={false}>
+                    <motion.div
+                      key={s.userId}
+                      initial={{ scale: 0.4, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 0, opacity: 0 }}
+                      transition={{
+                        scale: {
+                          type: "spring",
+                          stiffness: 260,
+                          damping: 24,
+                          mass: 0.7,
+                          delay: (i % 10) * 0.04,
+                        },
+                        opacity: {
+                          duration: 0.25,
+                          delay: (i % 10) * 0.04,
+                        },
+                      }}
+                      style={{
+                        transformOrigin: "50% 60%",
+                        willChange: "transform, opacity",
+                      }}
+                    >
+                      <Polaroid
+                        student={s}
+                        focused={false}
+                        queued={inFlight.has(s.userId)}
+                        width={cardW}
+                        developDelay={(i % 10) * 0.04 + 0.55}
+                      />
+                    </motion.div>
+                  </AnimatePresence>
                 </button>
               </div>
             );

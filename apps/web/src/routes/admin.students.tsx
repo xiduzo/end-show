@@ -24,6 +24,7 @@ type StudentRow = {
   competencies: string[];
   workMediaKind: "work-image" | "work-video" | null;
   workMediaUrl: string | null;
+  portraitUrl: string | null;
   hasMedia: boolean;
   usedBytes: number;
   budgetBytes: number;
@@ -803,15 +804,23 @@ function Row({
       />
 
       <div className="relative z-10 flex items-center gap-3">
-        <span
-          className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-xs font-bold",
-            avatarColor(row.userId),
-            "text-ink",
-          )}
-        >
-          {initials(row.displayName || row.name)}
-        </span>
+        {row.portraitUrl ? (
+          <img
+            src={row.portraitUrl}
+            alt={`${row.displayName || row.name} portrait`}
+            className="h-9 w-9 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <span
+            className={cn(
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display text-xs font-bold",
+              avatarColor(row.userId),
+              "text-ink",
+            )}
+          >
+            {initials(row.displayName || row.name)}
+          </span>
+        )}
         <span className="flex flex-col">
           <span className="font-display text-sm font-bold text-ink">
             {row.displayName || row.name}

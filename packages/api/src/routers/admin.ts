@@ -14,7 +14,7 @@ import {
 } from "../budget";
 import { getAssetStore } from "../assetStore";
 import { router, staffProcedure } from "../index";
-import { draftLink, type StageColor } from "./student";
+import { defaultStageColor, draftLink, type StageColor } from "./student";
 
 const stageColorSchema = z.enum(["slime", "crayon", "bubblegum"]);
 
@@ -89,6 +89,7 @@ export const adminRouter = router({
     }
     const assetRows = await db
       .select({
+        id: asset.id,
         studentUserId: asset.studentUserId,
         bytes: asset.bytes,
         kind: asset.kind,
@@ -98,6 +99,7 @@ export const adminRouter = router({
     const usedByUser = new Map<string, number>();
     const kindsByUser = new Map<string, Set<string>>();
     const workMediaByUser = new Map<string, { kind: string; r2Key: string }>();
+    const assetById = new Map(assetRows.map((a) => [a.id, a]));
     for (const a of assetRows) {
       usedByUser.set(
         a.studentUserId,
@@ -147,6 +149,12 @@ export const adminRouter = router({
         const workMediaUrl = workMedia
           ? getAssetStore().publicUrl(workMedia.r2Key)
           : null;
+        const portraitAsset = s?.portraitAssetId
+          ? assetById.get(s.portraitAssetId)
+          : undefined;
+        const portraitUrl = portraitAsset
+          ? getAssetStore().publicUrl(portraitAsset.r2Key)
+          : null;
         const updatedAt = s?.updatedAt ?? u.createdAt;
         const comps = compsByUser.get(u.id) ?? [];
         const isComplete = Boolean(
@@ -169,6 +177,7 @@ export const adminRouter = router({
           competencies: comps,
           workMediaKind,
           workMediaUrl,
+          portraitUrl,
           hasMedia: Boolean(kinds && kinds.size > 0),
           usedBytes: used,
           budgetBytes: budget,
@@ -328,7 +337,9 @@ export const adminRouter = router({
         emailVerified: true,
         role: "student",
       });
-      await db.insert(student).values({ userId });
+      await db
+        .insert(student)
+        .values({ userId, stageColor: defaultStageColor(userId) });
       try {
         await sendStudentInviteEmail({ to: input.email, name: input.name });
       } catch (e) {

@@ -2,6 +2,7 @@ import { db } from "@end-show/db";
 import { asset } from "@end-show/db/schema/asset";
 import { user } from "@end-show/db/schema/auth";
 import { student, studentCompetency } from "@end-show/db/schema/student";
+import { observable } from "@trpc/server/observable";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 
@@ -11,6 +12,11 @@ import {
   STAGE_TIME_WINDOW_MS,
   getAppearanceLog,
 } from "../queue/appearanceLog";
+import {
+  type StudentUpdate,
+  emitStudentUpdate,
+  subscribeStudentUpdates,
+} from "../studentEvents";
 
 export type StageColor = "slime" | "crayon" | "bubblegum";
 
@@ -284,8 +290,15 @@ export const studentRouter = router({
           .insert(studentCompetency)
           .values(input.competencies.map((tag) => ({ studentUserId: userId, tag })));
       }
+      emitStudentUpdate(userId);
       return { ok: true };
     }),
+
+  watchUpdates: publicProcedure.subscription(() =>
+    observable<StudentUpdate>((emit) => {
+      return subscribeStudentUpdates((u) => emit.next(u));
+    }),
+  ),
 
   cohortTags: protectedProcedure
     .input(z.object({ excludeUserId: z.string().optional() }).optional())

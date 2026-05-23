@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { ConnectionIndicator } from "@/shell";
 import { useStageCode } from "@/features/stage";
 import { trpc, trpcClient } from "@/lib/trpc";
+import { useStudentUpdates } from "@/lib/use-student-updates";
 import { useTapGesture } from "@/lib/use-tap-gesture";
 
 import { EmptyState } from "./empty-state";
@@ -22,6 +23,7 @@ import { WallShowcase } from "./wall-showcase";
 
 export function CompanionView({ tier }: { tier: CompanionTier }) {
   const { stageCode, setStageCode, clear: clearStageCode } = useStageCode();
+  useStudentUpdates();
   const students = useQuery(trpc.student.listEligible.queryOptions());
   const push = useMutation(trpc.queue.push.mutationOptions());
   const [queue, setQueue] = useState<QueueSnap | null>(null);

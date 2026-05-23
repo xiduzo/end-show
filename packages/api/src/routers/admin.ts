@@ -14,6 +14,7 @@ import {
 } from "../budget";
 import { getAssetStore } from "../assetStore";
 import { router, staffProcedure } from "../index";
+import { emitStudentUpdate } from "../studentEvents";
 import { defaultStageColor, draftLink, type StageColor } from "./student";
 
 const stageColorSchema = z.enum(["slime", "crayon", "bubblegum"]);
@@ -345,6 +346,7 @@ export const adminRouter = router({
       await db
         .insert(student)
         .values({ userId, stageColor: defaultStageColor(userId) });
+      emitStudentUpdate(userId);
       try {
         await sendStudentInviteEmail({ to: input.email, name: input.name });
       } catch (e) {
@@ -378,6 +380,7 @@ export const adminRouter = router({
         }
       }
       await db.delete(user).where(inArray(user.id, studentIds));
+      for (const id of studentIds) emitStudentUpdate(id);
       return { removed: studentIds.length };
     }),
 
@@ -421,6 +424,7 @@ export const adminRouter = router({
           .insert(studentCompetency)
           .values(rest.competencies.map((tag) => ({ studentUserId: userId, tag })));
       }
+      emitStudentUpdate(userId);
       return { ok: true as const };
     }),
 

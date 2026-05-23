@@ -4,6 +4,7 @@ import { student } from "@end-show/db/schema/student";
 import { and, eq } from "drizzle-orm";
 
 import { type AssetKind, getAssetStore } from "./assetStore";
+import { emitStudentUpdate } from "./studentEvents";
 
 type SlotColumn = "portraitAssetId" | "workMediaAssetId";
 
@@ -73,6 +74,7 @@ export async function assignAsset(input: AssignInput): Promise<AssignResult> {
     await evictAsset(priorAssetId);
   }
 
+  emitStudentUpdate(input.userId);
   return { ok: true, publicUrl: getAssetStore().publicUrl(input.r2Key) };
 }
 
@@ -102,6 +104,7 @@ export async function removeAsset(input: RemoveInput): Promise<RemoveResult> {
   }
 
   await db.delete(asset).where(eq(asset.id, input.assetId));
+  emitStudentUpdate(input.userId);
   return { ok: true };
 }
 

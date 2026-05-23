@@ -1,7 +1,7 @@
 import type { StudentSummary } from "@end-show/api/routers/student";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { AnimatePresence, motion } from "motion/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Polaroid } from "./polaroid";
 import type { CompanionTier } from "./types";
@@ -27,7 +27,15 @@ export function WallLane({
   inFlight: Set<string>;
 }) {
   const isMobile = tier === "mobile";
-  const N = students.length;
+  // Stabilise wall display order: server sorts by Stage Time for fairness,
+  // but slot→student mapping must not reshuffle when the server reorders or
+  // when filters change. Sort by userId so each Student has a deterministic
+  // home on the lane.
+  const sortedStudents = useMemo(
+    () => [...students].sort((a, b) => a.userId.localeCompare(b.userId)),
+    [students],
+  );
+  const N = sortedStudents.length;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -80,13 +88,13 @@ export function WallLane({
     return () => ro.disconnect();
   }, []);
 
-  // Track must be wide enough that one copy fully covers the viewport plus
-  // buffer; otherwise wrap seam shows. Cycle through students if too few.
-  const minSlots = Math.max(
-    N,
-    Math.max(1, Math.ceil(((size.w || 800) + SPACING * 2) / SPACING)),
-  );
-  const slots = N === 0 ? 0 : minSlots;
+  // Slot count is viewport-only: students cycle via i % N. Decoupling slots
+  // from N keeps TRACK_W stable when the filter changes the cohort size, so
+  // the lane doesn't jump its wrap seam.
+  const slots =
+    N === 0
+      ? 0
+      : Math.max(1, Math.ceil(((size.w || 800) + SPACING * 2) / SPACING));
   const TRACK_W = slots * SPACING;
 
   const applyTransform = useCallback(() => {
@@ -95,8 +103,12 @@ export function WallLane({
       track.style.transform = `translate3d(${-posRef.current}px, 0, 0)`;
   }, []);
 
-  // After geometry changes, re-apply transform so initial paint is correct
+  // After geometry changes, re-wrap so a posRef that lived in the old
+  // second-copy region doesn't snap to a different slot when TRACK_W shrinks.
   useEffect(() => {
+    if (TRACK_W > 0) {
+      posRef.current = ((posRef.current % TRACK_W) + TRACK_W) % TRACK_W;
+    }
     applyTransform();
   }, [applyTransform, TRACK_W]);
 
@@ -163,7 +175,7 @@ export function WallLane({
     const slotKey = wrapper?.getAttribute("data-slot-key") ?? null;
     const rotAttr = wrapper?.getAttribute("data-rot");
     const student = studentId
-      ? (students.find((s) => s.userId === studentId) ?? null)
+      ? (sortedStudents.find((s) => s.userId === studentId) ?? null)
       : null;
     velocityRef.current = 0;
     dragRef.current = {
@@ -295,7 +307,8 @@ export function WallLane({
       >
         {[0, 1].map((copy) =>
           Array.from({ length: slots }).map((_, i) => {
-            const s = students[i % N];
+            const s = sortedStudents[i % N];
+            if (!s) return null;
             const slotKey = `${copy}-${i}-${s.userId}`;
             const wrapperKey = `${copy}-${i}`;
             const isThrown = throws.some((t) => t.slotKey === slotKey);

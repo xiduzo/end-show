@@ -3,6 +3,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 
 import { StageCard } from "@/features/stage";
 import { trpc } from "@/lib/trpc";
+import { useStudentUpdates } from "@/lib/use-student-updates";
 
 export const Route = createFileRoute("/stage-preview/$userId")({
   component: StagePreviewRoute,
@@ -11,6 +12,7 @@ export const Route = createFileRoute("/stage-preview/$userId")({
 function StagePreviewRoute() {
   const { userId } = Route.useParams();
   const router = useRouter();
+  useStudentUpdates();
   const { data: student, isLoading } = useQuery(
     trpc.student.byUserId.queryOptions({ userId }),
   );

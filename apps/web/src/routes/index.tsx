@@ -18,6 +18,7 @@ import {
 } from "@/features/stage";
 import { useStageCode } from "@/features/stage";
 import { trpc, trpcClient } from "@/lib/trpc";
+import { useStudentUpdates } from "@/lib/use-student-updates";
 import { useTapGesture } from "@/lib/use-tap-gesture";
 import { cn } from "@end-show/ui/lib/utils";
 
@@ -58,6 +59,7 @@ function StageRoute() {
   const [snap, setSnap] = useState<StageSnap | null>(null);
   const [queue, setQueue] = useState<QueueSnap | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  useStudentUpdates();
   const students = useQuery(trpc.student.listEligible.queryOptions());
 
   useTapGesture({

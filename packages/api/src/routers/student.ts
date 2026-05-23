@@ -67,7 +67,12 @@ const profileInput = z.object({
 
 export const studentRouter = router({
   listEligible: publicProcedure.query(async (): Promise<StudentSummary[]> => {
-    const rows = await db.select().from(student);
+    const joined = await db
+      .select({ s: student })
+      .from(student)
+      .innerJoin(user, eq(user.id, student.userId))
+      .where(eq(user.role, "student"));
+    const rows = joined.map((j) => j.s);
     const comps = await db.select().from(studentCompetency);
     const byStudent = new Map<string, string[]>();
     for (const c of comps) {
@@ -108,10 +113,11 @@ export const studentRouter = router({
     .input(z.object({ userId: z.string() }))
     .query(async ({ input }): Promise<StudentSummary | null> => {
       const rows = await db
-        .select()
+        .select({ s: student })
         .from(student)
-        .where(eq(student.userId, input.userId));
-      const row = rows[0];
+        .innerJoin(user, eq(user.id, student.userId))
+        .where(and(eq(student.userId, input.userId), eq(user.role, "student")));
+      const row = rows[0]?.s;
       if (!row) return null;
       const comps = await db
         .select()

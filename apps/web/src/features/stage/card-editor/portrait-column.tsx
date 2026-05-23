@@ -14,7 +14,7 @@ export function PortraitColumn({
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between">
-        <p className="font-mono text-[10px] tracking-widest text-lego-dark/60 uppercase">
+        <p className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
           portrait <span className="text-slide">*</span>
         </p>
         {portraitUrl && !readOnly && (
@@ -22,7 +22,7 @@ export function PortraitColumn({
             type="button"
             onClick={onPick}
             disabled={busy}
-            className="font-mono text-[10px] tracking-widest text-lego-dark/60 uppercase hover:text-slide disabled:opacity-40"
+            className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase hover:text-slide disabled:opacity-40"
           >
             {busy
               ? progress > 0 && progress < 100
@@ -40,7 +40,7 @@ export function PortraitColumn({
             className="h-full w-full object-cover"
           />
         ) : readOnly ? (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[repeating-linear-gradient(135deg,rgba(1,1,45,0.04)_0_1px,transparent_1px_8px)] font-mono text-[10px] text-lego-dark/40">
+          <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[repeating-linear-gradient(135deg,rgba(1,1,45,0.04)_0_1px,transparent_1px_8px)] font-mono text-xs text-lego-dark/40">
             <span>no portrait</span>
             <span>student uploads from /profile</span>
           </div>
@@ -56,7 +56,7 @@ export function PortraitColumn({
           </button>
         )}
         {!portraitUrl && (
-          <span className="absolute top-2 left-2 font-mono text-[9px] tracking-widest text-lego-dark/40 uppercase">
+          <span className="absolute top-2 left-2 font-mono text-xs tracking-widest text-lego-dark/40 uppercase">
             3:4 · portrait
           </span>
         )}

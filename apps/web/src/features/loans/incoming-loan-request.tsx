@@ -16,9 +16,11 @@ export type IncomingLoan = {
 export function IncomingLoanRequest({
   loan,
   headroomAfterBytes,
+  readOnly = false,
 }: {
   loan: IncomingLoan;
   headroomAfterBytes: number;
+  readOnly?: boolean;
 }) {
   const qc = useQueryClient();
   const respond = useMutation(trpc.budget.respond.mutationOptions());
@@ -46,7 +48,7 @@ export function IncomingLoanRequest({
             {initials(name)}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="font-mono text-[10px] tracking-widest text-lego-dark/60 uppercase">
+            <p className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
               incoming request · {timeAgo(loan.createdAt)}
             </p>
             <p className="mt-0.5 font-mono text-base">
@@ -63,26 +65,30 @@ export function IncomingLoanRequest({
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => doRespond(false)}
-              disabled={respond.isPending}
-              className="rounded-full border border-lego-dark/30 px-4 py-1.5 font-mono text-xs hover:bg-lego-dark/5 disabled:opacity-40"
-            >
-              decline
-            </button>
-            <button
-              type="button"
-              onClick={() => doRespond(true)}
-              disabled={respond.isPending}
-              className="rounded-full bg-slide px-5 py-1.5 font-mono text-xs font-bold text-chalkboard disabled:opacity-40"
-            >
-              accept · lend {shortMB(loan.bytes)} ↑
-            </button>
-          </div>
-          <p className="font-mono text-[10px] tracking-widest text-lego-dark/50 uppercase">
-            your headroom after: {shortMB(headroomAfterBytes)}
+          {!readOnly && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => doRespond(false)}
+                disabled={respond.isPending}
+                className="rounded-full border border-lego-dark/30 px-4 py-1.5 font-mono text-xs hover:bg-lego-dark/5 disabled:opacity-40"
+              >
+                decline
+              </button>
+              <button
+                type="button"
+                onClick={() => doRespond(true)}
+                disabled={respond.isPending}
+                className="rounded-full bg-slide px-5 py-1.5 font-mono text-xs font-bold text-chalkboard disabled:opacity-40"
+              >
+                accept · lend {shortMB(loan.bytes)} ↑
+              </button>
+            </div>
+          )}
+          <p className="font-mono text-xs tracking-widest text-lego-dark/50 uppercase">
+            {readOnly
+              ? `headroom after: ${shortMB(headroomAfterBytes)}`
+              : `your headroom after: ${shortMB(headroomAfterBytes)}`}
           </p>
         </div>
       </div>

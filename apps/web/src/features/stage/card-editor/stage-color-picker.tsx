@@ -40,7 +40,7 @@ export function StageColorPicker({
               aria-hidden
             />
             {selected && (
-              <span className="absolute top-1 right-1 rounded-full bg-chalkboard/95 px-1.5 font-mono text-[9px] font-bold text-lego-dark">
+              <span className="absolute top-1 right-1 rounded-full bg-chalkboard/95 px-1.5 font-mono text-xs font-bold text-lego-dark">
                 ✓
               </span>
             )}

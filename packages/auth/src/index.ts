@@ -5,6 +5,51 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP } from "better-auth/plugins/email-otp";
 
+type OtpType = "sign-in" | "email-verification" | "forget-password";
+
+const SUBJECTS: Record<OtpType, string> = {
+  "sign-in": "Your sign-in code",
+  "email-verification": "Verify your email",
+  "forget-password": "Reset your password",
+};
+
+async function sendOtpEmail(args: {
+  email: string;
+  otp: string;
+  type: OtpType;
+}) {
+  const { email, otp, type } = args;
+
+  if (!env.RESEND_API_KEY) {
+    console.log(`[auth][otp] type=${type} email=${email} otp=${otp}`);
+    return;
+  }
+
+  const subject = SUBJECTS[type] ?? "Your verification code";
+  const text = `Your code is ${otp}. It expires in 10 minutes.`;
+  const html = `<p>Your code is <strong style="font-size:18px;letter-spacing:2px">${otp}</strong>.</p><p>It expires in 10 minutes.</p>`;
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: env.RESEND_FROM,
+      to: [email],
+      subject,
+      text,
+      html,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Resend send failed: ${res.status} ${body}`);
+  }
+}
+
 export function createAuth() {
   const db = createDb();
 
@@ -13,7 +58,9 @@ export function createAuth() {
       provider: "sqlite",
       schema: schema,
     }),
-    trustedOrigins: env.CORS_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean),
+    trustedOrigins: env.CORS_ORIGIN.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     user: {
@@ -36,12 +83,14 @@ export function createAuth() {
     plugins: [
       emailOTP({
         async sendVerificationOTP({ email, otp, type }) {
-          // Dev transport: log to server stdout. Replace with real provider in deploy.
+          // Dev transport: log to server stdout.
           console.log(`[auth][otp] type=${type} email=${email} otp=${otp}`);
+
+          await sendOtpEmail({ email, otp, type: type as OtpType });
         },
         otpLength: 6,
         expiresIn: 600,
-        disableSignUp: false,
+        disableSignUp: true,
       }),
     ],
   });

@@ -106,7 +106,7 @@ export function BorrowDialog({ onClose }: { onClose: () => void }) {
         <div className="grid grid-cols-1 gap-0 lg:grid-cols-[360px_1fr]">
           {/* Left: amount + why */}
           <div className="border-r border-lego-dark/15 p-6">
-            <p className="font-mono text-[10px] tracking-widest text-lego-dark/60 uppercase">
+            <p className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
               how much do you need?
             </p>
             <p className="mt-2 font-display text-5xl font-bold tracking-tight">
@@ -124,12 +124,12 @@ export function BorrowDialog({ onClose }: { onClose: () => void }) {
               onChange={(e) => setMb(Number(e.target.value))}
               className="mt-3 w-full accent-slide"
             />
-            <div className="mt-1 flex justify-between font-mono text-[10px] text-lego-dark/50">
+            <div className="mt-1 flex justify-between font-mono text-xs text-lego-dark/50">
               <span>1 MB</span>
               <span>{MAX_MB} MB · max per request</span>
             </div>
 
-            <p className="mt-6 font-mono text-[10px] tracking-widest text-lego-dark/60 uppercase">
+            <p className="mt-6 font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
               why? · they'll see this
             </p>
             <textarea
@@ -139,7 +139,7 @@ export function BorrowDialog({ onClose }: { onClose: () => void }) {
               rows={4}
               className="mt-2 w-full resize-none rounded-md border border-lego-dark/20 bg-white px-3 py-2 font-mono text-sm text-lego-dark placeholder:text-lego-dark/30 focus:border-lego focus:outline-none"
             />
-            <div className="mt-1 flex justify-between font-mono text-[10px] text-lego-dark/40">
+            <div className="mt-1 flex justify-between font-mono text-xs text-lego-dark/40">
               <span>keep it short · they're busy</span>
               <span>
                 {reason.length} / {REASON_MAX}
@@ -150,10 +150,10 @@ export function BorrowDialog({ onClose }: { onClose: () => void }) {
           {/* Right: peer list */}
           <div className="p-6">
             <div className="mb-3 flex items-baseline justify-between">
-              <p className="font-mono text-[10px] tracking-widest text-lego-dark/60 uppercase">
+              <p className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
                 who has room? · sorted by spare
               </p>
-              <p className="font-mono text-[10px] text-lego-dark/40">
+              <p className="font-mono text-xs text-lego-dark/40">
                 {eligibleCount} of {peers.data?.length ?? 0} have ≥ {mb} MB free
               </p>
             </div>
@@ -194,7 +194,7 @@ export function BorrowDialog({ onClose }: { onClose: () => void }) {
                   >
                     <span
                       className={cn(
-                        "flex size-8 shrink-0 items-center justify-center rounded-full font-mono text-[10px] font-bold text-chalkboard",
+                        "flex size-8 shrink-0 items-center justify-center rounded-full font-mono text-xs font-bold text-chalkboard",
                         avatarColor(p.id),
                       )}
                     >

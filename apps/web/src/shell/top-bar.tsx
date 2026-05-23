@@ -29,13 +29,13 @@ export function TopBar({ crumbs, statusText, actions }: Props) {
   };
   return (
     <div className="sticky top-0 z-30 border-b border-lego-dark/10 bg-chalkboard/90 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-8 py-3">
+      <div className="mx-auto flex container items-center justify-between gap-4 py-3">
         <nav
           aria-label="Breadcrumb"
           className="flex items-center gap-2 font-mono text-xs"
         >
-          <span className="rounded-full bg-lego-dark/5 px-2 py-0.5 text-[10px] tracking-widest text-lego-dark/50 uppercase">
-            '26 · mdd
+          <span className="rounded-full bg-lego-dark/5 px-2 py-0.5 text-xs tracking-widest text-lego-dark/50 uppercase">
+            MDD
           </span>
           {crumbs?.map((c, i) => {
             const isLast = i === crumbs.length - 1;
@@ -48,9 +48,7 @@ export function TopBar({ crumbs, statusText, actions }: Props) {
                   <span
                     aria-current={isLast ? "page" : undefined}
                     className={
-                      isLast
-                        ? "font-bold text-lego-dark"
-                        : "text-lego-dark/50"
+                      isLast ? "font-bold text-lego-dark" : "text-lego-dark/50"
                     }
                   >
                     {c.label}
@@ -69,7 +67,7 @@ export function TopBar({ crumbs, statusText, actions }: Props) {
         </nav>
         <div className="flex items-center gap-3">
           {statusText ? (
-            <span className="font-mono text-[11px] text-lego-dark/60">
+            <span className="font-mono text-xs text-lego-dark/60">
               <span className="mr-1.5 inline-block size-1.5 rounded-full bg-slime align-middle" />
               {statusText}
             </span>
@@ -77,7 +75,7 @@ export function TopBar({ crumbs, statusText, actions }: Props) {
           {actions}
           {session?.user?.email ? (
             <span
-              className="font-mono text-[11px] text-lego-dark/60"
+              className="font-mono text-xs text-lego-dark/60"
               title="signed in as"
             >
               {session.user.email}

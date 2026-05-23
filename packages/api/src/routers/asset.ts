@@ -5,10 +5,39 @@ import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { user } from "@end-show/db/schema/auth";
+
 import { getAssetStore } from "../assetStore";
 import { computeBudget } from "../budget";
 import { protectedProcedure, router } from "../index";
 import { assignAsset, removeAsset } from "../studentSlots";
+
+type CtxUser = { id: string; role?: string | null };
+
+function isStaff(ctx: { session: { user: CtxUser } }): boolean {
+  return ctx.session.user.role === "staff";
+}
+
+async function resolveTargetUserId(
+  ctx: { session: { user: CtxUser } },
+  targetUserId: string | undefined,
+): Promise<string> {
+  if (!targetUserId || targetUserId === ctx.session.user.id) {
+    return ctx.session.user.id;
+  }
+  if (!isStaff(ctx)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Only staff can act on another student",
+    });
+  }
+  const rows = await db.select().from(user).where(eq(user.id, targetUserId));
+  const u = rows[0];
+  if (!u || u.role !== "student") {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Student not found" });
+  }
+  return targetUserId;
+}
 
 const MAX_PORTRAIT_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_WORK_IMAGE_BYTES = 25 * 1024 * 1024; // 25 MB
@@ -45,6 +74,7 @@ export const assetRouter = router({
         kind: z.enum(["portrait", "work-image", "work-video"]),
         mimeType: z.string().min(1),
         bytes: z.number().int().positive(),
+        targetUserId: z.string().min(1).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -70,7 +100,7 @@ export const assetRouter = router({
         });
       }
 
-      const userId = ctx.session.user.id;
+      const userId = await resolveTargetUserId(ctx, input.targetUserId);
       // Ensure student row exists (insert blank if missing)
       const existing = await db.select().from(student).where(eq(student.userId, userId));
       if (existing.length === 0) {
@@ -123,11 +153,13 @@ export const assetRouter = router({
         width: z.number().int().positive().nullish(),
         height: z.number().int().positive().nullish(),
         durationMs: z.number().int().positive().nullish(),
+        targetUserId: z.string().min(1).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const userId = await resolveTargetUserId(ctx, input.targetUserId);
       const result = await assignAsset({
-        userId: ctx.session.user.id,
+        userId,
         assetId: input.assetId,
         kind: input.kind,
         r2Key: input.r2Key,

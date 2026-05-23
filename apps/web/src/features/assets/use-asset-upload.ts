@@ -29,7 +29,10 @@ function resolveKind(
   return candidates[0] ?? null;
 }
 
-export function useAssetUpload(opts: { onUploaded: () => void }) {
+export function useAssetUpload(opts: {
+  onUploaded: () => void;
+  targetUserId?: string;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -61,6 +64,7 @@ export function useAssetUpload(opts: { onUploaded: () => void }) {
         kind,
         mimeType: file.type,
         bytes: file.size,
+        targetUserId: opts.targetUserId,
       });
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -84,6 +88,7 @@ export function useAssetUpload(opts: { onUploaded: () => void }) {
         r2Key,
         bytes: file.size,
         mimeType: file.type,
+        targetUserId: opts.targetUserId,
       });
       opts.onUploaded();
     } catch (err) {

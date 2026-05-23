@@ -20,7 +20,7 @@ export function StageCodeChip({
       <button
         type="button"
         onClick={() => setEditing((v) => !v)}
-        className="bg-slide text-lego-dark inline-flex items-center gap-2 rounded-full px-3 py-1 font-mono text-[10px] font-bold tracking-widest uppercase shadow-md"
+        className="bg-slide text-lego-dark inline-flex items-center gap-2 rounded-full px-3 py-1 font-mono text-xs font-bold tracking-widest uppercase shadow-md"
       >
         <span>{tier}</span>
         <span className="text-lego-dark/60">·</span>
@@ -43,7 +43,7 @@ export function StageCodeChip({
               setEntry("");
               setEditing(false);
             }}
-            className="rounded-full border border-chalkboard/20 bg-white/40 px-3 py-1 font-mono text-[10px] tracking-widest uppercase backdrop-blur disabled:opacity-40"
+            className="rounded-full border border-chalkboard/20 bg-white/40 px-3 py-1 font-mono text-xs tracking-widest uppercase backdrop-blur disabled:opacity-40"
           >
             pair
           </button>
@@ -54,7 +54,7 @@ export function StageCodeChip({
                 onSetCode(null);
                 setEditing(false);
               }}
-              className="rounded-full border border-chalkboard/20 bg-white/40 px-3 py-1 font-mono text-[10px] tracking-widest uppercase backdrop-blur"
+              className="rounded-full border border-chalkboard/20 bg-white/40 px-3 py-1 font-mono text-xs tracking-widest uppercase backdrop-blur"
             >
               reset
             </button>

@@ -14,7 +14,13 @@ export type OutgoingLoan = {
   lender: { id: string; name: string; email: string; displayName: string } | null;
 };
 
-export function OutgoingLoanRow({ loan }: { loan: OutgoingLoan }) {
+export function OutgoingLoanRow({
+  loan,
+  readOnly = false,
+}: {
+  loan: OutgoingLoan;
+  readOnly?: boolean;
+}) {
   const qc = useQueryClient();
   const cancel = useMutation(trpc.budget.cancel.mutationOptions());
   const name =
@@ -43,14 +49,16 @@ export function OutgoingLoanRow({ loan }: { loan: OutgoingLoan }) {
       reason={loan.reason || undefined}
       meta="waiting for response"
       actions={
-        <button
-          type="button"
-          onClick={doCancel}
-          disabled={cancel.isPending}
-          className="rounded-full border border-lego-dark/30 px-4 py-1.5 font-mono text-xs hover:bg-lego-dark/5 disabled:opacity-40"
-        >
-          cancel
-        </button>
+        readOnly ? undefined : (
+          <button
+            type="button"
+            onClick={doCancel}
+            disabled={cancel.isPending}
+            className="rounded-full border border-lego-dark/30 px-4 py-1.5 font-mono text-xs hover:bg-lego-dark/5 disabled:opacity-40"
+          >
+            cancel
+          </button>
+        )
       }
     />
   );

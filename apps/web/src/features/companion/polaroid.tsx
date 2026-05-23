@@ -38,7 +38,7 @@ export function Polaroid({
         {competency && (
           <span
             className={cn(
-              "absolute -top-2 z-10 rounded-sm px-2 py-0.5 font-mono text-[10px] font-bold tracking-wider shadow-md",
+              "absolute -top-2 z-10 rounded-sm px-2 py-0.5 font-mono text-xs font-bold tracking-wider shadow-md",
               sticker.bg,
               sticker.fg,
             )}

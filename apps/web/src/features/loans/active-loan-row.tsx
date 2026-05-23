@@ -18,10 +18,12 @@ export function ActiveLoanRow({
   loan,
   direction,
   headroomBytes,
+  readOnly = false,
 }: {
   loan: ActiveLoan;
   direction: "lent" | "borrowed";
   headroomBytes?: number;
+  readOnly?: boolean;
 }) {
   const qc = useQueryClient();
   const giveBack = useMutation(trpc.budget.returnLoan.mutationOptions());
@@ -62,7 +64,7 @@ export function ActiveLoanRow({
             : `need ${shortMB(loan.bytes)} free to return`
       }
       actions={
-        !isLent ? (
+        !isLent && !readOnly ? (
           <button
             type="button"
             onClick={doReturn}

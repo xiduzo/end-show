@@ -99,10 +99,12 @@ export const adminRouter = router({
         studentUserId: asset.studentUserId,
         bytes: asset.bytes,
         kind: asset.kind,
+        r2Key: asset.r2Key,
       })
       .from(asset);
     const usedByUser = new Map<string, number>();
     const kindsByUser = new Map<string, Set<string>>();
+    const workMediaByUser = new Map<string, { kind: string; r2Key: string }>();
     for (const a of assetRows) {
       usedByUser.set(
         a.studentUserId,
@@ -111,6 +113,12 @@ export const adminRouter = router({
       const set = kindsByUser.get(a.studentUserId) ?? new Set<string>();
       set.add(a.kind);
       kindsByUser.set(a.studentUserId, set);
+      if (a.kind === "work-image" || a.kind === "work-video") {
+        const existing = workMediaByUser.get(a.studentUserId);
+        if (!existing || (a.kind === "work-video" && existing.kind !== "work-video")) {
+          workMediaByUser.set(a.studentUserId, { kind: a.kind, r2Key: a.r2Key });
+        }
+      }
     }
     const loanRows = await db
       .select()
@@ -142,6 +150,10 @@ export const adminRouter = router({
             : kinds?.has("work-image")
               ? "work-image"
               : null;
+        const workMedia = workMediaByUser.get(u.id);
+        const workMediaUrl = workMedia
+          ? getAssetStore().publicUrl(workMedia.r2Key)
+          : null;
         const updatedAt = s?.updatedAt ?? u.createdAt;
         const comps = compsByUser.get(u.id) ?? [];
         const isComplete = Boolean(
@@ -163,6 +175,7 @@ export const adminRouter = router({
           link: s?.link ?? "",
           competencies: comps,
           workMediaKind,
+          workMediaUrl,
           hasMedia: Boolean(kinds && kinds.size > 0),
           usedBytes: used,
           budgetBytes: budget,
@@ -217,6 +230,141 @@ export const adminRouter = router({
             ? work.kind
             : null,
       };
+    }),
+
+  listStaff: staffProcedure.query(async ({ ctx }) => {
+    const rootEmail = env.ROOT_STAFF_EMAIL.toLowerCase();
+    const callerId = (ctx.session.user as { id: string }).id;
+    const rows = await db
+      .select({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.createdAt,
+      })
+      .from(user)
+      .where(eq(user.role, "staff"));
+    return rows
+      .map((u) => ({
+        userId: u.id,
+        name: u.name,
+        email: u.email,
+        isRoot: u.email.toLowerCase() === rootEmail,
+        isSelf: u.id === callerId,
+        createdAt: u.createdAt instanceof Date ? u.createdAt.getTime() : Date.now(),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }),
+
+  createStaff: staffProcedure
+    .input(
+      z.object({
+        name: z.string().trim().min(1).max(80),
+        email: z.string().trim().toLowerCase().email().max(200),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const existing = await db.select().from(user).where(eq(user.email, input.email));
+      if (existing.length > 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "A user with that email already exists",
+        });
+      }
+      const userId = crypto.randomUUID();
+      await db.insert(user).values({
+        id: userId,
+        name: input.name,
+        email: input.email,
+        emailVerified: true,
+        role: "staff",
+      });
+      return { userId };
+    }),
+
+  removeStaff: staffProcedure
+    .input(z.object({ userIds: z.array(z.string().min(1)).min(1).max(50) }))
+    .mutation(async ({ ctx, input }) => {
+      const callerId = (ctx.session.user as { id: string }).id;
+      if (input.userIds.includes(callerId)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot remove yourself",
+        });
+      }
+      const rows = await db.select().from(user).where(inArray(user.id, input.userIds));
+      const rootEmail = env.ROOT_STAFF_EMAIL.toLowerCase();
+      const removable = rows.filter(
+        (u) => u.role === "staff" && u.email.toLowerCase() !== rootEmail,
+      );
+      if (removable.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "No removable staff in selection (root staff is protected)",
+        });
+      }
+      await db.delete(user).where(
+        inArray(
+          user.id,
+          removable.map((u) => u.id),
+        ),
+      );
+      return { removed: removable.length };
+    }),
+
+  createStudent: staffProcedure
+    .input(
+      z.object({
+        name: z.string().trim().min(1).max(80),
+        email: z.string().trim().toLowerCase().email().max(200),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const existing = await db.select().from(user).where(eq(user.email, input.email));
+      if (existing.length > 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "A user with that email already exists",
+        });
+      }
+      const userId = crypto.randomUUID();
+      await db.insert(user).values({
+        id: userId,
+        name: input.name,
+        email: input.email,
+        emailVerified: true,
+        role: "student",
+      });
+      await db.insert(student).values({ userId });
+      return { userId };
+    }),
+
+  removeStudents: staffProcedure
+    .input(z.object({ userIds: z.array(z.string().min(1)).min(1).max(200) }))
+    .mutation(async ({ ctx, input }) => {
+      const callerId = (ctx.session.user as { id: string }).id;
+      if (input.userIds.includes(callerId)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot remove yourself" });
+      }
+      const rows = await db.select().from(user).where(inArray(user.id, input.userIds));
+      const studentIds = rows.filter((u) => u.role === "student").map((u) => u.id);
+      if (studentIds.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "No students found" });
+      }
+      const assets = await db
+        .select({ r2Key: asset.r2Key })
+        .from(asset)
+        .where(inArray(asset.studentUserId, studentIds));
+      const store = getAssetStore();
+      for (const a of assets) {
+        try {
+          await store.delete(a.r2Key);
+        } catch (e) {
+          console.warn("[admin] r2 delete failed", e);
+        }
+      }
+      await db.delete(user).where(inArray(user.id, studentIds));
+      return { removed: studentIds.length };
     }),
 
   upsertStudent: staffProcedure

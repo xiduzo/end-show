@@ -138,6 +138,7 @@ export function CardEditor({
         queryKey: trpc.student.getMyProfile.queryKey(),
       });
     },
+    targetUserId: mode === "staff" ? profile.userId : undefined,
   });
 
   const isComplete =
@@ -193,7 +194,7 @@ export function CardEditor({
 
       {budgetSlot}
 
-      <div className="mx-auto max-w-6xl px-8 pt-10 pb-8">
+      <div className="mx-auto container pt-10 pb-8">
         <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
           <h1 className="font-display text-5xl font-bold tracking-tight">
             {isNew ? "Set up your card" : "Edit your card"}
@@ -217,7 +218,7 @@ export function CardEditor({
               {statusText}
             </span>
             {savedText && (
-              <span className="font-mono text-[10px] text-lego-dark/40">
+              <span className="font-mono text-xs text-lego-dark/40">
                 {savedText}
               </span>
             )}
@@ -225,14 +226,13 @@ export function CardEditor({
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl border-t border-dashed border-lego-dark/15 px-8 py-8">
+      <div className="mx-auto container border-t border-dashed border-lego-dark/15 py-8">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[220px_1fr_1fr]">
           <PortraitColumn
             portraitUrl={profile.portraitUrl}
             busy={upload.busy && upload.activeKind === "portrait"}
             progress={upload.progress}
             onPick={() => upload.pickFile("portrait")}
-            readOnly={mode === "staff"}
           />
 
           <div className="space-y-5">
@@ -297,7 +297,6 @@ export function CardEditor({
               progress={upload.progress}
               onPick={() => upload.pickFile(["work-image", "work-video"])}
               onPickVideo={() => upload.pickFile("work-video")}
-              readOnly={mode === "staff"}
             />
             <Field label="Stage color" required hint="your backdrop on stage">
               <StageColorPicker
@@ -315,7 +314,7 @@ export function CardEditor({
         onChange={(next) => update("competencies", next)}
       />
 
-      <div className="mx-auto max-w-6xl border-t border-dashed border-lego-dark/15 px-8 py-8">
+      <div className="mx-auto container border-t border-dashed border-lego-dark/15 py-8">
         <StagePreview draft={draft} profile={profile} flushSave={flushSave} />
       </div>
     </div>

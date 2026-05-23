@@ -18,7 +18,7 @@ export function ShowcaseColumn({
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between">
-        <p className="font-mono text-[10px] tracking-widest text-lego-dark/60 uppercase">
+        <p className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
           showcase work <span className="text-slide">*</span>
         </p>
         {workMediaUrl && !readOnly ? (
@@ -26,12 +26,12 @@ export function ShowcaseColumn({
             type="button"
             onClick={onPick}
             disabled={busy}
-            className="font-mono text-[10px] tracking-widest text-lego-dark/60 uppercase hover:text-slide disabled:opacity-40"
+            className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase hover:text-slide disabled:opacity-40"
           >
             {busy ? `${progress}%` : "replace ↺"}
           </button>
         ) : (
-          <p className="font-mono text-[10px] text-lego-dark/40">
+          <p className="font-mono text-xs text-lego-dark/40">
             one piece · image or video
           </p>
         )}
@@ -57,7 +57,7 @@ export function ShowcaseColumn({
             />
           )
         ) : readOnly ? (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-1 font-mono text-[10px] text-chalkboard/40">
+          <div className="flex h-full w-full flex-col items-center justify-center gap-1 font-mono text-xs text-chalkboard/40">
             <span>no work uploaded</span>
             <span>student uploads from /profile</span>
           </div>

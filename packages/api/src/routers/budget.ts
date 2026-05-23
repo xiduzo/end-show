@@ -46,8 +46,19 @@ async function loadPeers(ids: string[]): Promise<Map<string, Peer>> {
 }
 
 export const budgetRouter = router({
-  get: protectedProcedure.query(async ({ ctx }) => {
-    const me = ctx.session.user.id;
+  get: protectedProcedure
+    .input(z.object({ userId: z.string().min(1).optional() }).optional())
+    .query(async ({ ctx, input }) => {
+    const callerId = ctx.session.user.id;
+    const role = (ctx.session.user as { role?: string }).role;
+    const target = input?.userId;
+    if (target && target !== callerId && role !== "staff") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Only staff can view another student's budget",
+      });
+    }
+    const me = target ?? callerId;
     const budget = await computeBudget(me);
 
     const loans = await db

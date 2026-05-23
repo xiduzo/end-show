@@ -33,13 +33,13 @@ export function StagePreview({
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between">
-        <p className="font-mono text-[10px] tracking-widest text-lego-dark/60 uppercase">
+        <p className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
           stage preview
         </p>
         <button
           type="button"
           onClick={openFullscreen}
-          className="font-mono text-[10px] tracking-widest text-lego-dark/60 uppercase hover:text-slide"
+          className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase hover:text-slide"
         >
           full screen preview ↗
         </button>

@@ -152,7 +152,7 @@ export function WallShowcase({
         {competency && (
           <span
             className={cn(
-              "absolute -top-2 z-20 rounded-sm px-2 py-0.5 font-mono text-[10px] font-bold tracking-wider shadow-md",
+              "absolute -top-2 z-20 rounded-sm px-2 py-0.5 font-mono text-xs font-bold tracking-wider shadow-md",
               sticker.bg,
               sticker.fg,
             )}
@@ -257,7 +257,7 @@ export function WallShowcase({
           className="flex h-full w-full flex-col bg-[#fdfaf2] p-6 sm:p-8"
         >
           <p
-            className="font-mono text-[11px] font-bold tracking-[0.24em] uppercase"
+            className="font-mono text-xs font-bold tracking-[0.24em] uppercase"
             style={{ color: palette.dark + "80" }}
           >
             {student.pronouns}

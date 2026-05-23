@@ -13,7 +13,7 @@ export function OneLinerMeter({ value }: { value: string }) {
             ? `${len} / 80 · looking good`
             : `${len} / 80 · over`;
   return (
-    <p className="mt-1 text-right font-mono text-[10px] text-lego-dark/40">
+    <p className="mt-1 text-right font-mono text-xs text-lego-dark/40">
       {tone}
     </p>
   );

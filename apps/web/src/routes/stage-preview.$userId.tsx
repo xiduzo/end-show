@@ -48,7 +48,7 @@ function StagePreviewRoute() {
       <button
         type="button"
         onClick={goBack}
-        className="absolute top-4 left-4 z-30 rounded-full bg-chalkboard/80 px-4 py-1.5 font-mono text-[11px] tracking-widest text-lego-dark uppercase backdrop-blur hover:bg-chalkboard"
+        className="absolute top-4 left-4 z-30 rounded-full bg-chalkboard/80 px-4 py-1.5 font-mono text-xs tracking-widest text-lego-dark uppercase backdrop-blur hover:bg-chalkboard"
       >
         ← back
       </button>

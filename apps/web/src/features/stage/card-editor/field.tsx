@@ -12,12 +12,12 @@ export function Field({
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between">
-        <span className="font-mono text-[10px] tracking-widest text-lego-dark/60 uppercase">
+        <span className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
           {label}
           {required && <span className="ml-0.5 text-slide">*</span>}
         </span>
         {hint && (
-          <span className="font-mono text-[10px] text-lego-dark/40">
+          <span className="font-mono text-xs text-lego-dark/40">
             {hint}
           </span>
         )}

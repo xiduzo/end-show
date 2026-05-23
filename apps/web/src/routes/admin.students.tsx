@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -22,6 +22,7 @@ type StudentRow = {
   link: string;
   competencies: string[];
   workMediaKind: "work-image" | "work-video" | null;
+  workMediaUrl: string | null;
   hasMedia: boolean;
   usedBytes: number;
   budgetBytes: number;
@@ -36,6 +37,34 @@ type Filter =
   | "flagged"
   | "over-budget"
   | "no-media";
+
+type SortKey =
+  | "name"
+  | "competencies"
+  | "showcase"
+  | "link"
+  | "size"
+  | "status"
+  | "edited";
+
+const STATUS_RANK: Record<string, number> = {
+  flagged: 0,
+  "no profile": 1,
+  incomplete: 2,
+  complete: 3,
+};
+
+const SHOWCASE_RANK: Record<string, number> = {
+  "work-video": 0,
+  "work-image": 1,
+};
+
+function statusOf(r: StudentRow): string {
+  if (!r.hasProfile) return "no profile";
+  if (r.overBudget) return "flagged";
+  if (r.isComplete) return "complete";
+  return "incomplete";
+}
 
 const PAGE_SIZE = 10;
 
@@ -130,14 +159,39 @@ function toCsv(rows: StudentRow[]): string {
 }
 
 function AdminStudentsRoute() {
+  const qc = useQueryClient();
   const list = useQuery(trpc.admin.listStudents.queryOptions());
+  const createStudent = useMutation(
+    trpc.admin.createStudent.mutationOptions({
+      onSuccess: async () => {
+        await qc.invalidateQueries({
+          queryKey: trpc.admin.listStudents.queryKey(),
+        });
+      },
+    }),
+  );
+  const removeStudents = useMutation(
+    trpc.admin.removeStudents.mutationOptions({
+      onSuccess: async () => {
+        await qc.invalidateQueries({
+          queryKey: trpc.admin.listStudents.queryKey(),
+        });
+        await qc.invalidateQueries({
+          queryKey: trpc.student.listEligible.queryKey(),
+        });
+      },
+    }),
+  );
 
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<"name" | "edited">("edited");
+  const [sortKey, setSortKey] = useState<SortKey>("edited");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteName, setInviteName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
 
   const rows: StudentRow[] = list.data ?? [];
 
@@ -175,12 +229,37 @@ function AdminStudentsRoute() {
     });
     out = [...out].sort((a, b) => {
       const dir = sortDir === "asc" ? 1 : -1;
-      if (sortKey === "name") {
-        return (
-          (a.displayName || a.name).localeCompare(b.displayName || b.name) * dir
-        );
+      switch (sortKey) {
+        case "name":
+          return (
+            (a.displayName || a.name).localeCompare(b.displayName || b.name) *
+            dir
+          );
+        case "competencies":
+          return (a.competencies.length - b.competencies.length) * dir;
+        case "showcase": {
+          const ra = a.workMediaKind
+            ? (SHOWCASE_RANK[a.workMediaKind] ?? 2)
+            : 2;
+          const rb = b.workMediaKind
+            ? (SHOWCASE_RANK[b.workMediaKind] ?? 2)
+            : 2;
+          return (ra - rb) * dir;
+        }
+        case "link":
+          return (a.link || "").localeCompare(b.link || "") * dir;
+        case "size":
+          return (a.usedBytes - b.usedBytes) * dir;
+        case "status":
+          return (
+            ((STATUS_RANK[statusOf(a)] ?? 99) -
+              (STATUS_RANK[statusOf(b)] ?? 99)) *
+            dir
+          );
+        case "edited":
+        default:
+          return (a.updatedAt - b.updatedAt) * dir;
       }
-      return (a.updatedAt - b.updatedAt) * dir;
     });
     return out;
   }, [rows, filter, search, sortKey, sortDir]);
@@ -194,13 +273,18 @@ function AdminStudentsRoute() {
   const startIdx = filtered.length === 0 ? 0 : safePage * PAGE_SIZE + 1;
   const endIdx = Math.min(filtered.length, (safePage + 1) * PAGE_SIZE);
 
-  const onToggleSort = (key: "name" | "edited") => {
+  const onToggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else {
       setSortKey(key);
-      setSortDir(key === "name" ? "asc" : "desc");
+      setSortDir(
+        key === "name" || key === "link" || key === "status" ? "asc" : "desc",
+      );
     }
   };
+
+  const arrow = (key: SortKey) =>
+    sortKey === key ? (sortDir === "asc" ? " ↑" : " ↓") : "";
 
   const onExportCsv = () => {
     const csv = toCsv(filtered);
@@ -224,21 +308,65 @@ function AdminStudentsRoute() {
     });
   };
 
+  const handleInviteSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = inviteName.trim();
+    const email = inviteEmail.trim();
+    if (!name || !email) return;
+    try {
+      await createStudent.mutateAsync({ name, email });
+      toast.success(`${name} added`);
+      setInviteName("");
+      setInviteEmail("");
+      setInviteOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not add student");
+    }
+  };
+
+  const handleRemoveSelected = async () => {
+    const userIds = Array.from(selected);
+    if (userIds.length === 0) return;
+    if (
+      !window.confirm(
+        `Remove ${userIds.length} student${userIds.length === 1 ? "" : "s"}? This deletes their profile, uploads, and account.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await removeStudents.mutateAsync({ userIds });
+      toast.success(
+        `Removed ${res.removed} student${res.removed === 1 ? "" : "s"}`,
+      );
+      setSelected(new Set());
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not remove students",
+      );
+    }
+  };
+
   return (
     <div className="min-h-screen bg-chalkboard text-ink">
       <TopBar crumbs={[{ label: "admin" }, { label: "students" }]} />
-      <div className="container mx-auto max-w-7xl px-6 py-10 font-mono">
-        <header className="flex flex-col gap-8 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h1 className="font-display text-[5rem] leading-none font-bold tracking-tight text-ink">
-              Roster<span className="text-slide">.</span>
-            </h1>
-          </div>
-        </header>
+      <div className="container mx-auto py-10 font-mono">
+        <nav className="mt-6 flex gap-2 border-b border-dashed border-ink/15">
+          <Link
+            to="/admin/students"
+            className="-mb-px border-b-2 border-ink px-3 py-2 text-sm font-medium text-ink"
+          >
+            Students
+          </Link>
+          <Link
+            to="/admin/staff"
+            className="-mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium text-ink/50 hover:text-ink"
+          >
+            Staff
+          </Link>
+        </nav>
 
-        <div className="my-8 border-t border-dashed border-ink/20" />
-
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3 mt-6">
           <FilterPill
             active={filter === "all"}
             count={counts.total}
@@ -315,13 +443,13 @@ function AdminStudentsRoute() {
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/40 text-sm">
                 ⌕
               </span>
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-ink/15 px-1.5 text-[10px] uppercase text-ink/50">
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-ink/15 px-1.5 text-xs uppercase text-ink/50">
                 ⌘K
               </span>
             </div>
             <button
               type="button"
-              onClick={() => toast("Invite flow not implemented yet")}
+              onClick={() => setInviteOpen(true)}
               className="h-9 rounded-full border border-ink/20 bg-white px-4 text-sm font-medium hover:border-ink/40"
             >
               + invite student
@@ -336,8 +464,35 @@ function AdminStudentsRoute() {
           </div>
         </div>
 
+        {selected.size > 0 && (
+          <div className="mt-4 flex items-center justify-between rounded-md border border-ink/15 bg-lego px-4 py-2 text-chalkboard">
+            <span className="text-xs tracking-widest uppercase">
+              {selected.size} selected
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelected(new Set())}
+                className="rounded-full border border-chalkboard/30 px-3 py-1 text-xs hover:bg-chalkboard/10"
+              >
+                clear
+              </button>
+              <button
+                type="button"
+                onClick={handleRemoveSelected}
+                disabled={removeStudents.isPending}
+                className="rounded-full bg-slide px-3 py-1 text-xs font-medium text-white hover:bg-slide/90 disabled:opacity-50"
+              >
+                {removeStudents.isPending
+                  ? "removing…"
+                  : `remove ${selected.size}`}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="mt-6 rounded-lg border border-ink/15 bg-white">
-          <div className="grid grid-cols-[40px_minmax(180px,1.6fr)_minmax(140px,1fr)_100px_minmax(140px,1fr)_minmax(160px,1fr)_120px_120px_40px] items-center gap-3 rounded-t-lg bg-lego px-4 py-3 text-[10px] tracking-[0.2em] uppercase text-chalkboard/70">
+          <div className="grid grid-cols-[40px_minmax(180px,1.6fr)_minmax(140px,1fr)_100px_minmax(140px,1fr)_minmax(160px,1fr)_120px_120px_40px] items-center gap-3 rounded-t-lg bg-lego px-4 py-3 text-xs tracking-[0.2em] uppercase text-chalkboard/70">
             <input
               type="checkbox"
               checked={allOnPageSelected}
@@ -349,20 +504,49 @@ function AdminStudentsRoute() {
               onClick={() => onToggleSort("name")}
               className="text-left hover:text-chalkboard"
             >
-              name {sortKey === "name" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              name{arrow("name")}
             </button>
-            <span>Competencies</span>
-            <span>Showcase</span>
-            <span>Portfolio Link</span>
-            <span>Size</span>
-            <span>Status</span>
+            <button
+              type="button"
+              onClick={() => onToggleSort("competencies")}
+              className="text-left hover:text-chalkboard"
+            >
+              Competencies{arrow("competencies")}
+            </button>
+            <button
+              type="button"
+              onClick={() => onToggleSort("showcase")}
+              className="text-left hover:text-chalkboard"
+            >
+              Showcase{arrow("showcase")}
+            </button>
+            <button
+              type="button"
+              onClick={() => onToggleSort("link")}
+              className="text-left hover:text-chalkboard"
+            >
+              Portfolio Link{arrow("link")}
+            </button>
+            <button
+              type="button"
+              onClick={() => onToggleSort("size")}
+              className="text-left hover:text-chalkboard"
+            >
+              Size{arrow("size")}
+            </button>
+            <button
+              type="button"
+              onClick={() => onToggleSort("status")}
+              className="text-left hover:text-chalkboard"
+            >
+              Status{arrow("status")}
+            </button>
             <button
               type="button"
               onClick={() => onToggleSort("edited")}
               className="text-left hover:text-chalkboard"
             >
-              edited{" "}
-              {sortKey === "edited" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+              edited{arrow("edited")}
             </button>
             <span />
           </div>
@@ -423,10 +607,77 @@ function AdminStudentsRoute() {
           </div>
         </div>
 
-        <footer className="mt-16 flex items-center justify-between border-t border-dashed border-ink/20 pt-6 text-[10px] tracking-[0.2em] uppercase text-ink/50">
-          <span>End Show '26 · MDD Graduation · {counts.total} Students</span>
+        <footer className="mt-16 flex items-center justify-between border-t border-dashed border-ink/20 pt-6 text-xs tracking-[0.2em] uppercase text-ink/50">
+          <span>End Show · MDD Graduation · {counts.total} Students</span>
         </footer>
       </div>
+
+      {inviteOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+          onClick={() => !createStudent.isPending && setInviteOpen(false)}
+        >
+          <form
+            onSubmit={handleInviteSubmit}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-lg border border-ink/15 bg-white p-6 font-mono shadow-xl"
+          >
+            <h2 className="font-display text-2xl font-bold text-ink">
+              Invite student
+            </h2>
+            <p className="mt-1 text-xs text-ink/60">
+              Creates an account. The student signs in via email OTP.
+            </p>
+
+            <label className="mt-5 block text-xs tracking-[0.2em] uppercase text-ink/60">
+              Name
+            </label>
+            <input
+              type="text"
+              value={inviteName}
+              onChange={(e) => setInviteName(e.target.value)}
+              autoFocus
+              required
+              maxLength={80}
+              className="mt-1 h-10 w-full rounded-md border border-ink/20 bg-white px-3 text-sm focus:border-ink/50 focus:outline-none"
+            />
+
+            <label className="mt-4 block text-xs tracking-[0.2em] uppercase text-ink/60">
+              Email
+            </label>
+            <input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              required
+              maxLength={200}
+              className="mt-1 h-10 w-full rounded-md border border-ink/20 bg-white px-3 text-sm focus:border-ink/50 focus:outline-none"
+            />
+
+            <div className="mt-6 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setInviteOpen(false)}
+                disabled={createStudent.isPending}
+                className="h-9 rounded-full border border-ink/20 px-4 text-sm hover:border-ink/40 disabled:opacity-50"
+              >
+                cancel
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  createStudent.isPending ||
+                  !inviteName.trim() ||
+                  !inviteEmail.trim()
+                }
+                className="h-9 rounded-full bg-ink px-4 text-sm font-medium text-chalkboard hover:bg-ink/90 disabled:opacity-50"
+              >
+                {createStudent.isPending ? "adding…" : "add student"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
@@ -453,7 +704,7 @@ function StatCard({
       <span className="font-display text-3xl font-bold leading-none">
         {value}
       </span>
-      <span className="text-[10px] tracking-[0.2em] uppercase opacity-80">
+      <span className="text-xs tracking-[0.2em] uppercase opacity-80">
         {label}
       </span>
     </div>
@@ -485,7 +736,7 @@ function FilterPill({
       <span>{children}</span>
       <span
         className={cn(
-          "text-[10px]",
+          "text-xs",
           active ? "text-chalkboard/70" : "text-ink/50",
         )}
       >
@@ -505,6 +756,7 @@ function Row({
   onToggleSelect: () => void;
 }) {
   const [hoverComps, setHoverComps] = useState(false);
+  const [hoverShowcase, setHoverShowcase] = useState(false);
 
   const compCount = row.competencies.length;
   const pct =
@@ -526,7 +778,7 @@ function Row({
   return (
     <li
       className="relative grid grid-cols-[40px_minmax(180px,1.6fr)_minmax(140px,1fr)_100px_minmax(140px,1fr)_minmax(160px,1fr)_120px_120px_40px] items-center gap-3 px-4 py-3 text-sm hover:bg-ink/[0.02]"
-      style={hoverComps ? { zIndex: 40 } : undefined}
+      style={hoverComps || hoverShowcase ? { zIndex: 40 } : undefined}
     >
       <Link
         to="/admin/students/$userId"
@@ -556,7 +808,7 @@ function Row({
             {row.displayName || row.name}
           </span>
           {row.pronouns && (
-            <span className="text-[10px] tracking-widest uppercase text-ink/50">
+            <span className="text-xs tracking-widest uppercase text-ink/50">
               {row.pronouns}
             </span>
           )}
@@ -580,48 +832,78 @@ function Row({
               />
             ))}
           </div>
-          <span className="text-[10px] tracking-widest uppercase text-ink/70">
+          <span className="text-xs tracking-widest uppercase text-ink/70">
             {compCount}/5
           </span>
         </div>
-        {hoverComps && compCount > 0 && (
-          <div className="absolute left-0 top-full z-20 mt-2 w-max rounded-md bg-ink p-3 text-chalkboard shadow-lg">
-            <p className="text-[9px] tracking-widest uppercase text-chalkboard/60">
+        {hoverComps && (
+          <div className="absolute left-0 top-full z-20 mt-2 w-max max-w-xs rounded-md bg-ink p-3 text-chalkboard shadow-lg">
+            <p className="text-xs tracking-widest uppercase text-chalkboard/60">
               {compCount} of 5 competencies
             </p>
-            <div className="mt-2 flex flex-wrap gap-1">
-              {row.competencies.map((c) => (
-                <span
-                  key={c}
-                  className="rounded-full border border-chalkboard/30 px-2 py-0.5 text-[11px]"
-                >
-                  {c}
-                </span>
-              ))}
-            </div>
+            {compCount > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {row.competencies.map((c) => (
+                  <span
+                    key={c}
+                    className="rounded-full border border-chalkboard/30 px-2 py-0.5 text-xs"
+                  >
+                    {c}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-chalkboard/60 italic">
+                No competencies selected yet.
+              </p>
+            )}
           </div>
         )}
       </div>
 
-      <div>
+      <div
+        className="relative z-10"
+        onMouseEnter={() => setHoverShowcase(true)}
+        onMouseLeave={() => setHoverShowcase(false)}
+      >
         {row.workMediaKind ? (
           <span
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10px] tracking-widest uppercase",
+              "inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs tracking-widest uppercase",
               row.workMediaKind === "work-video"
                 ? "bg-slide text-white"
                 : "border border-ink/20 text-ink/70",
             )}
           >
-            <span className="text-[9px]">
+            <span className="text-xs">
               {row.workMediaKind === "work-video" ? "▶" : "◯"}
             </span>
             {row.workMediaKind === "work-video" ? "video" : "image"}
           </span>
         ) : (
-          <span className="text-[10px] tracking-widest uppercase text-ink/30">
+          <span className="text-xs tracking-widest uppercase text-ink/30">
             —
           </span>
+        )}
+        {hoverShowcase && row.workMediaUrl && (
+          <div className="absolute left-0 top-full z-20 mt-2 w-64 overflow-hidden rounded-md border border-ink/20 bg-ink p-1 shadow-lg">
+            {row.workMediaKind === "work-video" ? (
+              <video
+                src={row.workMediaUrl}
+                muted
+                autoPlay
+                loop
+                playsInline
+                className="h-36 w-full rounded object-cover"
+              />
+            ) : (
+              <img
+                src={row.workMediaUrl}
+                alt={`${row.displayName || row.name} showcase`}
+                className="h-36 w-full rounded object-cover"
+              />
+            )}
+          </div>
         )}
       </div>
 
@@ -663,7 +945,7 @@ function Row({
       <div>
         <span
           className={cn(
-            "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] tracking-widest uppercase",
+            "inline-flex items-center rounded-full px-2 py-0.5 text-xs tracking-widest uppercase",
             status.className,
           )}
         >

@@ -62,7 +62,7 @@ export function LoanBanner({
             {initials(peerName)}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="font-mono text-[10px] tracking-widest text-lego-dark/60 uppercase">
+            <p className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
               {label}
             </p>
             <p className="mt-0.5 font-mono text-base">
@@ -82,7 +82,7 @@ export function LoanBanner({
         <div className="flex flex-col items-end gap-1">
           {actions}
           {meta && (
-            <p className="font-mono text-[10px] tracking-widest text-lego-dark/50 uppercase">
+            <p className="font-mono text-xs tracking-widest text-lego-dark/50 uppercase">
               {meta}
             </p>
           )}

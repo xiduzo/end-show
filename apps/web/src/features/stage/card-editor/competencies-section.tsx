@@ -49,10 +49,10 @@ export function CompetenciesSection({
 
   return (
     <section className="border-t border-lego-dark/15 bg-lego-dark/[0.03]">
-      <div className="mx-auto max-w-6xl px-8 py-10">
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_360px]">
+      <div className="mx-auto container py-10">
+        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[2fr_1fr]">
           <div>
-            <p className="font-mono text-[10px] tracking-widest text-lego-dark/60 uppercase">
+            <p className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
               competencies <span className="text-slide">*</span>
             </p>
             <h2 className="mt-2 font-display text-3xl font-bold tracking-tight">
@@ -63,7 +63,7 @@ export function CompetenciesSection({
               appear as you type, but you're never locked into them.
             </p>
 
-            <p className="mt-6 font-mono text-[10px] tracking-widest text-lego-dark/50 uppercase">
+            <p className="mt-6 font-mono text-xs tracking-widest text-lego-dark/50 uppercase">
               your competencies
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
@@ -85,7 +85,7 @@ export function CompetenciesSection({
               )}
             </div>
 
-            <p className="mt-6 font-mono text-[10px] tracking-widest text-lego-dark/50 uppercase">
+            <p className="mt-6 font-mono text-xs tracking-widest text-lego-dark/50 uppercase">
               add a competency
               {input && (
                 <span className="ml-2 text-lego-dark/40">· typing</span>
@@ -115,14 +115,14 @@ export function CompetenciesSection({
                   className="flex-1 bg-transparent font-mono text-sm placeholder:text-lego-dark/30 focus:outline-none"
                   maxLength={40}
                 />
-                <span className="font-mono text-[10px] text-lego-dark/40">
+                <span className="font-mono text-xs text-lego-dark/40">
                   {remaining} of {COMP_MAX} left
                 </span>
               </div>
 
               {focused && input.trim() && (
                 <div className="absolute top-full right-0 left-0 z-20 mt-1 rounded-md border border-lego-dark/20 bg-white shadow-lg">
-                  <p className="border-b border-lego-dark/10 px-3 py-2 font-mono text-[10px] tracking-widest text-lego-dark/50 uppercase">
+                  <p className="border-b border-lego-dark/10 px-3 py-2 font-mono text-xs tracking-widest text-lego-dark/50 uppercase">
                     matches from your cohort
                   </p>
                   {matches.length > 0 ? (
@@ -139,7 +139,7 @@ export function CompetenciesSection({
                         <span>
                           <Highlight text={m.tag} query={input} />
                         </span>
-                        <span className="text-[10px] text-lego-dark/40">
+                        <span className="text-xs text-lego-dark/40">
                           {m.count} {m.count === 1 ? "student" : "students"} in
                           your cohort
                         </span>
@@ -163,7 +163,7 @@ export function CompetenciesSection({
                         <span className="text-slide">+</span> add "
                         {input.trim()}" as a new tag — only you
                       </span>
-                      <span className="text-[10px]">shift + ↵</span>
+                      <span className="text-xs">shift + ↵</span>
                     </button>
                   )}
                 </div>
@@ -173,10 +173,10 @@ export function CompetenciesSection({
 
           <div>
             <div className="flex items-baseline justify-between">
-              <p className="font-mono text-[10px] tracking-widest text-lego-dark/50 uppercase">
+              <p className="font-mono text-xs tracking-widest text-lego-dark/50 uppercase">
                 your cohort is using
               </p>
-              <p className="font-mono text-[10px] text-lego-dark/40">
+              <p className="font-mono text-xs text-lego-dark/40">
                 click to add
               </p>
             </div>
@@ -195,14 +195,14 @@ export function CompetenciesSection({
                     className="rounded-full border border-lego-dark/25 bg-white px-2.5 py-0.5 font-mono text-xs text-lego-dark hover:border-slide hover:text-slide disabled:opacity-40"
                   >
                     {s.tag}{" "}
-                    <span className="text-[9px] text-lego-dark/40">
+                    <span className="text-xs text-lego-dark/40">
                       {s.count}
                     </span>
                   </button>
                 ))
               )}
             </div>
-            <p className="mt-4 font-mono text-[10px] text-lego-dark/40">
+            <p className="mt-4 font-mono text-xs text-lego-dark/40">
               <span className="font-bold">{competencies.length}</span> /{" "}
               {COMP_MAX} used
             </p>

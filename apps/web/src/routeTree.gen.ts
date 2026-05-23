@@ -16,6 +16,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as StagePreviewUserIdRouteImport } from './routes/stage-preview.$userId'
 import { Route as AdminStudentsRouteImport } from './routes/admin.students'
+import { Route as AdminStaffRouteImport } from './routes/admin.staff'
 import { Route as AdminStudentsUserIdRouteImport } from './routes/admin.students_.$userId'
 
 const ProfileRoute = ProfileRouteImport.update({
@@ -53,6 +54,11 @@ const AdminStudentsRoute = AdminStudentsRouteImport.update({
   path: '/students',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminStaffRoute = AdminStaffRouteImport.update({
+  id: '/staff',
+  path: '/staff',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminStudentsUserIdRoute = AdminStudentsUserIdRouteImport.update({
   id: '/students_/$userId',
   path: '/students/$userId',
@@ -65,6 +71,7 @@ export interface FileRoutesByFullPath {
   '/companion': typeof CompanionRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
+  '/admin/staff': typeof AdminStaffRoute
   '/admin/students': typeof AdminStudentsRoute
   '/stage-preview/$userId': typeof StagePreviewUserIdRoute
   '/admin/students/$userId': typeof AdminStudentsUserIdRoute
@@ -75,6 +82,7 @@ export interface FileRoutesByTo {
   '/companion': typeof CompanionRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
+  '/admin/staff': typeof AdminStaffRoute
   '/admin/students': typeof AdminStudentsRoute
   '/stage-preview/$userId': typeof StagePreviewUserIdRoute
   '/admin/students/$userId': typeof AdminStudentsUserIdRoute
@@ -86,6 +94,7 @@ export interface FileRoutesById {
   '/companion': typeof CompanionRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
+  '/admin/staff': typeof AdminStaffRoute
   '/admin/students': typeof AdminStudentsRoute
   '/stage-preview/$userId': typeof StagePreviewUserIdRoute
   '/admin/students_/$userId': typeof AdminStudentsUserIdRoute
@@ -98,6 +107,7 @@ export interface FileRouteTypes {
     | '/companion'
     | '/login'
     | '/profile'
+    | '/admin/staff'
     | '/admin/students'
     | '/stage-preview/$userId'
     | '/admin/students/$userId'
@@ -108,6 +118,7 @@ export interface FileRouteTypes {
     | '/companion'
     | '/login'
     | '/profile'
+    | '/admin/staff'
     | '/admin/students'
     | '/stage-preview/$userId'
     | '/admin/students/$userId'
@@ -118,6 +129,7 @@ export interface FileRouteTypes {
     | '/companion'
     | '/login'
     | '/profile'
+    | '/admin/staff'
     | '/admin/students'
     | '/stage-preview/$userId'
     | '/admin/students_/$userId'
@@ -183,6 +195,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminStudentsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/staff': {
+      id: '/admin/staff'
+      path: '/staff'
+      fullPath: '/admin/staff'
+      preLoaderRoute: typeof AdminStaffRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/students_/$userId': {
       id: '/admin/students_/$userId'
       path: '/students/$userId'
@@ -194,11 +213,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
+  AdminStaffRoute: typeof AdminStaffRoute
   AdminStudentsRoute: typeof AdminStudentsRoute
   AdminStudentsUserIdRoute: typeof AdminStudentsUserIdRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminStaffRoute: AdminStaffRoute,
   AdminStudentsRoute: AdminStudentsRoute,
   AdminStudentsUserIdRoute: AdminStudentsUserIdRoute,
 }

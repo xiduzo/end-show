@@ -11,8 +11,16 @@ function formatMB(bytes: number): string {
   return `${Math.round(mb)} MB`;
 }
 
-export function BudgetBar() {
-  const budget = useQuery(trpc.budget.get.queryOptions());
+export function BudgetBar({
+  userId,
+  readOnly = false,
+}: {
+  userId?: string;
+  readOnly?: boolean;
+} = {}) {
+  const budget = useQuery(
+    trpc.budget.get.queryOptions(userId ? { userId } : undefined),
+  );
   const [borrowOpen, setBorrowOpen] = useState(false);
 
   if (!budget.data) {
@@ -44,13 +52,13 @@ export function BudgetBar() {
 
   return (
     <>
-      <div className="mx-auto mt-6 max-w-6xl rounded-lg border-2 border-lego-dark/30 bg-white px-6 py-5">
-        <div className="grid grid-cols-1 items-center gap-6 lg:grid-cols-[1fr_auto]">
+      <div className="mx-auto mt-6 container rounded-lg border-2 border-lego-dark/30 bg-white py-5">
+        <div className="grid grid-cols-1 items-center gap-6 lg:grid-cols-[1fr_auto] px-6">
           <div>
-            <p className="font-mono text-[10px] tracking-widest text-lego-dark/60 uppercase">
+            <p className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
               storage budget
               {pendingOutSum > 0 && (
-                <span className="ml-2 rounded-full bg-crayon px-2 py-0.5 text-[9px] font-bold tracking-wider text-chalkboard">
+                <span className="ml-2 rounded-full bg-crayon px-2 py-0.5 text-xs font-bold tracking-wider text-chalkboard">
                   +{formatMB(pendingOutSum)} pending
                 </span>
               )}
@@ -72,26 +80,30 @@ export function BudgetBar() {
                 style={{ width: `${Math.min(100, pct)}%` }}
               />
             </div>
-            <p className="mt-1 font-mono text-[10px] text-lego-dark/50">
+            <p className="mt-1 font-mono text-xs text-lego-dark/50">
               <span className="float-right">
                 {formatMB(headroom)} headroom · {pctTone}
               </span>
             </p>
           </div>
 
-          <div className="flex flex-col items-end gap-1">
-            <button
-              type="button"
-              onClick={() => setBorrowOpen(true)}
-              className="rounded-full border-2 border-lego-dark px-5 py-2 font-mono text-xs font-bold text-lego-dark hover:bg-lego-dark hover:text-chalkboard"
-            >
-              I need more →
-            </button>
-          </div>
+          {!readOnly && (
+            <div className="flex flex-col items-end gap-1">
+              <button
+                type="button"
+                onClick={() => setBorrowOpen(true)}
+                className="rounded-full border-2 border-lego-dark px-5 py-2 font-mono text-xs font-bold text-lego-dark hover:bg-lego-dark hover:text-chalkboard"
+              >
+                I need more →
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {borrowOpen && <BorrowDialog onClose={() => setBorrowOpen(false)} />}
+      {!readOnly && borrowOpen && (
+        <BorrowDialog onClose={() => setBorrowOpen(false)} />
+      )}
     </>
   );
 }

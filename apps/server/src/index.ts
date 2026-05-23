@@ -14,7 +14,7 @@ import {
   createBunWSHandler,
 } from "trpc-bun-adapter";
 
-import { seedStudents } from "./seed";
+import { seedRootStaff } from "./seed";
 
 const app = new Hono();
 
@@ -27,7 +27,7 @@ app.get("/", (c) => c.text("OK"));
 const port = Number(process.env.PORT ?? 3000);
 
 await runMigrations();
-await seedStudents();
+await seedRootStaff();
 
 setRotationProvider(async () => {
   const rows = await db.select({ id: student.userId }).from(student);

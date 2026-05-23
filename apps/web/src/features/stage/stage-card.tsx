@@ -60,7 +60,7 @@ function CurrentStage({ student }: { student: StudentSummary }) {
             />
           </p>
           <h1 className="font-display text-h1 flex items-baseline text-chalkboard">
-            <MorphingName text={student.displayName} />
+            <MorphingName text={student.displayName.split(/\s+/)[0] ?? student.displayName} />
           </h1>
           <p className="text-body-3 font-mono text-chalkboard/80">
             <HyperText duration={700} delay={700}>

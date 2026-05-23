@@ -32,13 +32,7 @@ type StudentRow = {
   updatedAt: number;
 };
 
-type Filter =
-  | "all"
-  | "complete"
-  | "incomplete"
-  | "flagged"
-  | "over-budget"
-  | "no-media";
+type Filter = "all" | "complete" | "incomplete" | "over-budget";
 
 type SortKey =
   | "name"
@@ -50,7 +44,7 @@ type SortKey =
   | "edited";
 
 const STATUS_RANK: Record<string, number> = {
-  flagged: 0,
+  "over budget": 0,
   "no profile": 1,
   incomplete: 2,
   complete: 3,
@@ -63,7 +57,7 @@ const SHOWCASE_RANK: Record<string, number> = {
 
 function statusOf(r: StudentRow): string {
   if (!r.hasProfile) return "no profile";
-  if (r.overBudget) return "flagged";
+  if (r.overBudget) return "over budget";
   if (r.isComplete) return "complete";
   return "incomplete";
 }
@@ -201,18 +195,14 @@ function AdminStudentsRoute() {
     let total = 0;
     let complete = 0;
     let incomplete = 0;
-    let flagged = 0;
     let overBudget = 0;
-    let noMedia = 0;
     for (const r of rows) {
       total++;
       if (r.isComplete) complete++;
       else incomplete++;
-      if (r.overBudget) flagged++;
       if (r.overBudget) overBudget++;
-      if (!r.hasMedia) noMedia++;
     }
-    return { total, complete, incomplete, flagged, overBudget, noMedia };
+    return { total, complete, incomplete, overBudget };
   }, [rows]);
 
   const filtered = useMemo(() => {
@@ -220,9 +210,7 @@ function AdminStudentsRoute() {
     let out = rows.filter((r) => {
       if (filter === "complete" && !r.isComplete) return false;
       if (filter === "incomplete" && r.isComplete) return false;
-      if (filter === "flagged" && !r.overBudget) return false;
       if (filter === "over-budget" && !r.overBudget) return false;
-      if (filter === "no-media" && r.hasMedia) return false;
       if (!q) return true;
       const hay = [r.displayName, r.name, r.email, r.link, ...r.competencies]
         .join(" ")
@@ -404,16 +392,6 @@ function AdminStudentsRoute() {
             incomplete
           </FilterPill>
           <FilterPill
-            active={filter === "flagged"}
-            count={counts.flagged}
-            onClick={() => {
-              setFilter("flagged");
-              setPage(0);
-            }}
-          >
-            flagged
-          </FilterPill>
-          <FilterPill
             active={filter === "over-budget"}
             count={counts.overBudget}
             onClick={() => {
@@ -422,16 +400,6 @@ function AdminStudentsRoute() {
             }}
           >
             over budget
-          </FilterPill>
-          <FilterPill
-            active={filter === "no-media"}
-            count={counts.noMedia}
-            onClick={() => {
-              setFilter("no-media");
-              setPage(0);
-            }}
-          >
-            no media
           </FilterPill>
 
           <div className="ml-auto flex items-center gap-3">
@@ -782,7 +750,7 @@ function Row({
   const status = !row.hasProfile
     ? { label: "no profile", className: "border border-ink/20 text-ink/60" }
     : row.overBudget
-      ? { label: "flagged", className: "bg-slide text-white" }
+      ? { label: "over budget", className: "bg-slide text-white" }
       : row.isComplete
         ? { label: "complete", className: "bg-ink text-chalkboard" }
         : {

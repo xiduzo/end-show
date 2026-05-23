@@ -10,6 +10,7 @@ import { MorphingName } from "@/features/text-effects";
 import { WordRotate } from "@/features/text-effects";
 
 import { BackgroundDecor } from "./background-decor";
+import { DesatCrossfade } from "./desat-crossfade";
 import { resolveScrim, resolveWorkMedia } from "./stage-card-resolvers";
 import { StageShaderBackdrop } from "./stage-shader-backdrop";
 
@@ -49,7 +50,7 @@ function CurrentStage({ student }: { student: StudentSummary }) {
         className="relative z-10 mt-auto grid grid-cols-[auto_1fr_auto] items-end gap-10"
         style={{ textShadow: "0 1px 12px rgba(0,0,0,0.45)" }}
       >
-        <Avatar student={student} size={144} withInitials />
+        <Avatar student={student} size={256} withInitials />
 
         <div className="min-w-0">
           <p className="font-mono text-sm -mb-6 tracking-widest text-chalkboard/60 uppercase">
@@ -60,7 +61,9 @@ function CurrentStage({ student }: { student: StudentSummary }) {
             />
           </p>
           <h1 className="font-display text-h1 flex items-baseline text-chalkboard">
-            <MorphingName text={student.displayName.split(/\s+/)[0] ?? student.displayName} />
+            <MorphingName
+              text={student.displayName.split(/\s+/)[0] ?? student.displayName}
+            />
           </h1>
           <p className="text-body-3 font-mono text-chalkboard/80">
             <HyperText duration={700} delay={700}>
@@ -207,13 +210,15 @@ function Avatar({
   if (student.portraitUrl) {
     return (
       <div
-        className="relative overflow-hidden rounded-full border border-chalkboard/15"
+        className="relative overflow-hidden rounded-4xl border border-chalkboard/15"
         style={{ width: size, height: size }}
       >
-        <img
+        <DesatCrossfade
           src={student.portraitUrl}
           alt={student.displayName}
           className="h-full w-full object-cover"
+          durationMs={1200}
+          brightnessLift
         />
       </div>
     );

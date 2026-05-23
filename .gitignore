@@ -8,6 +8,7 @@ node-compile-cache
 dist
 build
 *.tsbuildinfo
+apps/**/*.js
 
 # Environment variables
 .env

@@ -10,6 +10,7 @@ import { QRCodeSVG } from "qrcode.react";
 
 import {
   BackgroundDecor,
+  DesatCrossfade,
   STAGE_HEIGHT,
   STAGE_WIDTH,
   StageCard,
@@ -261,10 +262,11 @@ function UpNextAvatar({
         className="relative overflow-hidden rounded-full border border-chalkboard/15"
         style={{ width: size, height: size }}
       >
-        <img
+        <DesatCrossfade
           src={student.portraitUrl}
           alt={student.displayName}
           className="h-full w-full object-cover"
+          durationMs={800}
         />
       </div>
     );

@@ -1,5 +1,6 @@
 export { BackgroundDecor } from "./background-decor";
 export { CardEditor } from "./card-editor/card-editor";
+export { DesatCrossfade } from "./desat-crossfade";
 export type {
   CardEditorDraft,
   CardEditorProfile,

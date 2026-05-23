@@ -1,11 +1,8 @@
 import { db } from "@end-show/db";
 import { appearance } from "@end-show/db/schema/appearance";
-import { and, eq, gte, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, or } from "drizzle-orm";
 
 export type AppearanceSource = "kiosk" | "mobile" | "rotation";
-
-/** Rolling window for the Stage Time fairness signal (ADR-0011). */
-export const STAGE_TIME_WINDOW_MS = 60 * 60 * 1000;
 
 export type AppearanceRecord = {
   id: string;
@@ -27,20 +24,25 @@ export type StartResult = { id: string; startedAtMs: number };
 export interface AppearanceLog {
   start(input: StartInput): Promise<StartResult>;
   end(id: string, endedAtMs?: number): Promise<void>;
-  recentForStudent(
-    studentUserId: string,
+  /** Raw Appearance rows for these Students whose interval overlaps
+   *  `[sinceMs, now]`. Ongoing rows (endedAt = null) are always included.
+   *  Aggregation lives in the Stage Time module — this is pure storage. */
+  rowsIn(
+    studentUserIds: string[],
     sinceMs: number,
   ): Promise<AppearanceRecord[]>;
   /**
-   * Sum of each Student's on-Stage time (ms) since `sinceMs`, across all Stages.
-   * Ongoing appearances count up to "now". Missing entries = zero.
-   * Drives the Stage Time fairness ranking (ADR-0011) used by Rotation pick
-   * and the Companion student list.
+   * Close orphaned in-flight rows. Sets `endedAt = startedAt + fillMs` as a
+   * best-guess attribution (see ADR-0007 §Recovery).
+   *
+   * @param fillMs    Duration to attribute to the closed appearance (use the
+   *                  Stage's Dwell — a realistic one-appearance approximation).
+   * @param maxAgeMs  Optional: only close rows whose `startedAt` is older than
+   *                  `now - maxAgeMs`. Used by the janitor to avoid clipping
+   *                  legitimately in-flight rows. Omit at boot.
+   * @returns         Number of rows closed.
    */
-  stageTimeIn(
-    studentUserIds: string[],
-    sinceMs: number,
-  ): Promise<Map<string, number>>;
+  closeAllOpen(fillMs: number, maxAgeMs?: number): Promise<number>;
 }
 
 export class DrizzleAppearanceLog implements AppearanceLog {
@@ -64,20 +66,19 @@ export class DrizzleAppearanceLog implements AppearanceLog {
       .where(eq(appearance.id, id));
   }
 
-  async recentForStudent(
-    studentUserId: string,
+  async rowsIn(
+    studentUserIds: string[],
     sinceMs: number,
   ): Promise<AppearanceRecord[]> {
+    if (studentUserIds.length === 0) return [];
+    const since = new Date(sinceMs);
     const rows = await db
       .select()
       .from(appearance)
       .where(
         and(
-          eq(appearance.studentUserId, studentUserId),
-          or(
-            isNull(appearance.endedAt),
-            gte(appearance.endedAt, new Date(sinceMs)),
-          ),
+          inArray(appearance.studentUserId, studentUserIds),
+          or(isNull(appearance.endedAt), gte(appearance.endedAt, since)),
         ),
       );
     return rows.map((r) => ({
@@ -90,33 +91,21 @@ export class DrizzleAppearanceLog implements AppearanceLog {
     }));
   }
 
-  async stageTimeIn(
-    studentUserIds: string[],
-    sinceMs: number,
-  ): Promise<Map<string, number>> {
-    const out = new Map<string, number>();
-    if (studentUserIds.length === 0) return out;
-    const since = new Date(sinceMs);
-    const rows = await db
-      .select()
-      .from(appearance)
-      .where(
-        and(
-          inArray(appearance.studentUserId, studentUserIds),
-          or(isNull(appearance.endedAt), gte(appearance.endedAt, since)),
-        ),
-      );
-    const now = Date.now();
-    for (const r of rows) {
-      const startedAtMs = r.startedAt.getTime();
-      const endedAtMs = r.endedAt?.getTime() ?? now;
-      const effStart = Math.max(startedAtMs, sinceMs);
-      const effEnd = Math.max(effStart, endedAtMs);
-      const ms = effEnd - effStart;
-      if (ms <= 0) continue;
-      out.set(r.studentUserId, (out.get(r.studentUserId) ?? 0) + ms);
+  async closeAllOpen(fillMs: number, maxAgeMs?: number): Promise<number> {
+    const cutoff =
+      maxAgeMs !== undefined ? new Date(Date.now() - maxAgeMs) : null;
+    const where = cutoff
+      ? and(isNull(appearance.endedAt), lt(appearance.startedAt, cutoff))
+      : isNull(appearance.endedAt);
+    const open = await db.select().from(appearance).where(where);
+    if (open.length === 0) return 0;
+    for (const r of open) {
+      await db
+        .update(appearance)
+        .set({ endedAt: new Date(r.startedAt.getTime() + fillMs) })
+        .where(eq(appearance.id, r.id));
     }
-    return out;
+    return open.length;
   }
 }
 
@@ -149,35 +138,29 @@ export class InMemoryAppearanceLog implements AppearanceLog {
     if (row) row.endedAtMs = endedAtMs;
   }
 
-  async recentForStudent(
-    studentUserId: string,
-    sinceMs: number,
-  ): Promise<AppearanceRecord[]> {
-    return this.rows.filter(
-      (r) =>
-        r.studentUserId === studentUserId &&
-        (r.endedAtMs === null || r.endedAtMs >= sinceMs),
-    );
-  }
-
-  async stageTimeIn(
+  async rowsIn(
     studentUserIds: string[],
     sinceMs: number,
-  ): Promise<Map<string, number>> {
+  ): Promise<AppearanceRecord[]> {
     const want = new Set(studentUserIds);
-    const out = new Map<string, number>();
-    const now = this.nowFn();
+    const nowMs = this.nowFn();
+    return this.rows.filter((r) => {
+      if (!want.has(r.studentUserId)) return false;
+      const endedAtMs = r.endedAtMs ?? nowMs;
+      return endedAtMs >= sinceMs;
+    });
+  }
+
+  async closeAllOpen(fillMs: number, maxAgeMs?: number): Promise<number> {
+    const nowMs = this.nowFn();
+    let n = 0;
     for (const r of this.rows) {
-      if (!want.has(r.studentUserId)) continue;
-      const endedAtMs = r.endedAtMs ?? now;
-      if (endedAtMs < sinceMs) continue;
-      const effStart = Math.max(r.startedAtMs, sinceMs);
-      const effEnd = Math.max(effStart, endedAtMs);
-      const ms = effEnd - effStart;
-      if (ms <= 0) continue;
-      out.set(r.studentUserId, (out.get(r.studentUserId) ?? 0) + ms);
+      if (r.endedAtMs !== null) continue;
+      if (maxAgeMs !== undefined && nowMs - r.startedAtMs < maxAgeMs) continue;
+      r.endedAtMs = r.startedAtMs + fillMs;
+      n += 1;
     }
-    return out;
+    return n;
   }
 
   reset(): void {

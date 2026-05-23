@@ -1,10 +1,9 @@
 import { createContext } from "@end-show/api/context";
-import { setRotationProvider } from "@end-show/api/queue/engine";
+import { getAppearanceLog } from "@end-show/api/queue/appearanceLog";
+import { DWELL_MS } from "@end-show/api/queue/engine";
 import { appRouter } from "@end-show/api/routers/index";
 import { auth } from "@end-show/auth";
-import { db } from "@end-show/db";
 import { runMigrations } from "@end-show/db/migrate";
-import { student } from "@end-show/db/schema/student";
 import { env } from "@end-show/env/server";
 import { Hono } from "hono";
 import { logger } from "hono/logger";
@@ -29,10 +28,38 @@ const port = Number(process.env.PORT ?? 3000);
 await runMigrations();
 await seedRootStaff();
 
-setRotationProvider(async () => {
-  const rows = await db.select({ id: student.userId }).from(student);
-  return rows.map((r) => r.id);
-});
+// ADR-0007 §Recovery — close Appearance rows orphaned by a previous process
+// (in-memory Queue state is rebuilt fresh; an open row would otherwise
+// inflate Stage Time forever). Best-guess fill = one Dwell.
+{
+  const closed = await getAppearanceLog().closeAllOpen(DWELL_MS);
+  if (closed > 0) {
+    console.log(`Closed ${closed} orphan appearance row(s) at boot.`);
+  }
+}
+
+// ADR-0007 §Recovery — janitor catches in-show leaks: failed `log.end()`
+// writes (engine.ts) and the fire-and-forget `log.end()` in subscribeStage's
+// last-listener cleanup. Threshold is generous so legitimately-extended
+// in-flight appearances are never clipped.
+const JANITOR_INTERVAL_MS = 60_000;
+const JANITOR_MAX_AGE_MS = DWELL_MS * 10;
+const janitor = setInterval(() => {
+  void getAppearanceLog()
+    .closeAllOpen(DWELL_MS, JANITOR_MAX_AGE_MS)
+    .then((n) => {
+      if (n > 0) console.log(`Janitor closed ${n} orphan appearance row(s).`);
+    })
+    .catch((err: unknown) => {
+      console.error("Janitor closeAllOpen failed:", err);
+    });
+}, JANITOR_INTERVAL_MS);
+
+for (const sig of ["SIGTERM", "SIGINT"] as const) {
+  process.on(sig, () => {
+    clearInterval(janitor);
+  });
+}
 
 const trpcCreateContext = async (opts: CreateBunContextOptions) => {
   return createContext({ headers: opts.req.headers });

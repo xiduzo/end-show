@@ -14,3 +14,32 @@ Live Stage state — Kiosk queue, Mobile queue, rotation cursor, current dwell, 
 - The Appearance table is append-only (closed by setting `endedAt`). Treat it as the source of truth for "did this Student appear" — never delete rows during the show. Post-show analytics also lean on this table.
 - A single server instance is now a hard requirement, not a default. Scaling out would require either (a) sticky-routing each `stageCode` to one instance, or (b) externalizing the channel state. Both are non-trivial; don't do them speculatively.
 - Future "current stage status" pages for Staff must read from the in-memory channel (via tRPC subscription/query), not from the database — the DB only knows about closed-or-current appearances, not the queues behind them.
+
+## Recovery
+
+An Appearance row is opened by `log.start()` and closed by `log.end()`. Three failure modes can leave a row with `endedAt = NULL` and no backing in-memory `ch.current`:
+
+1. **Process restart / deploy** — the in-flight Student's row is never closed.
+2. **`log.end()` write fails mid-advance** — `engine.ts` clears `ch.current` before the await resolves, so a thrown DB error orphans the row with no retry path.
+3. **Fire-and-forget `log.end()`** in the Stage subscriber's last-listener cleanup (`subscribeStage`) — if the process dies before the promise commits, the row stays open.
+
+An orphan row is destructive because Stage Time aggregation treats `endedAt = NULL` as "ongoing, ends at now": the row accrues Stage Time minute by minute until it hits the rolling-window ceiling (`STAGE_TIME_WINDOW_MS`, currently 60 min), at which point the affected Student is locked out of both Rotation and the Companion list for the remainder of the show.
+
+### Cleanup strategy
+
+The `AppearanceLog` adapter exposes `closeAllOpen(fillMs, maxAgeMs?)`. Closing sets `endedAt = startedAt + fillMs` rather than `endedAt = now` so the Student is credited with one realistic appearance's worth of attention rather than the full elapsed downtime. The fill value used in production is the Stage's Dwell — the same duration a normal appearance runs for.
+
+Two scheduled passes call it:
+
+- **Boot sweep** (`apps/server/src/index.ts`, after migrations): `closeAllOpen(DWELL_MS)` with no age threshold. By definition nothing is in-flight at boot, so every open row is an orphan.
+- **Janitor** (60-second interval, started at boot, cancelled on `SIGTERM` / `SIGINT`): `closeAllOpen(DWELL_MS, DWELL_MS × 10)`. The age threshold avoids clipping legitimately in-flight rows — extends do not open new rows, so a single appearance's DB-`startedAt` can lag the wall clock by several Dwells.
+
+### Bias of the fill value
+
+Under-counting (Student looks like they appeared less than they really did) is recoverable — the next legitimate appearance overwrites the count, and the window is rolling. Over-counting is destructive — a single bad row locks a Student out for up to 60 minutes. The one-Dwell fill leans toward under-counting in the extended-appearance case and tolerates a mild over-count when an orphan was created moments after `log.start()`. Worst-case error is bounded at one Dwell either way.
+
+### Out of scope
+
+- **`expectedEndAt` column** for precise janitor targeting — deferred until the time-threshold approach demonstrably misfires. Schema migration not worth it for v1's extend volume.
+- **Per-process boot-ID column** for multi-process recovery — irrelevant under the single-instance constraint above.
+- **Aggregation-time defensive cap** — overlaps the janitor; a single recovery mechanism is easier to reason about than two layered ones.

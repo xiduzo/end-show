@@ -67,6 +67,16 @@ Stage Time is the single fairness signal in the system. It is **not** a cap — 
 
 The 60-minute window matches the show's pacing: a Student's burst of attention naturally ages out within an hour, and the ranking has no discrete "now eligible again" boundary.
 
+#### Fairness policy knobs
+
+The Stage Time fairness signal is tuned by three constants. They are conceptually one policy and live together in the Stage Time module (`packages/api/src/queue/stageTime.ts`):
+
+- **`STAGE_TIME_WINDOW_MS`** — rolling window for Stage Time aggregation. Default: 60 minutes.
+- **`ROTATION_WINDOW`** — size of the most-overdue band that Rotation picks randomly from. Default: 12. Larger = more random feel; smaller = stricter fairness; 1 = pure least-Stage-Time-first.
+- **`COMPANION_HIDE_DECILE`** — fraction of the Stage-Time-leading Students hidden from the Companion list while idle (no search or filter active). Default: 0.10. The "intent overrides fairness" flip — applied by the Companion UI when the visitor types a search or selects a competency — is a separate, caller-side concern.
+
+Changes to these constants are tuning, not architecture. They do not require an ADR.
+
 ### Rotation
 The automatic refill of the Queue when both Kiosk and Mobile tiers are empty. Ensures the Stage never goes blank.
 
@@ -126,6 +136,9 @@ The system is **always-on**. There is no Show domain entity, no scheduled start/
 
 ### Stage empty state
 When zero Students are eligible (i.e. no Student has both `isPublished = true` and a complete profile), the Stage shows a dedicated **empty state** view (branded idle screen). Expected to be rare — only between system bring-up and the first Student publishing.
+
+### No-audience pause
+A Stage channel without any connected Stage subscribers is **paused**: its dwell timer is cancelled and the in-flight Appearance is closed. The Queue itself is preserved. When a Stage reconnects (or first connects), it re-advances from the head of the Queue. Rationale: [Stage Time](#stage-time) is the audience-attention signal; advancing without an audience would inflate it for Students nobody saw. Companion taps that arrive during a paused interval enqueue normally and are drained on the next Stage connect.
 
 ## Realtime transport
 

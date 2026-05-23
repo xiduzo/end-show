@@ -1,10 +1,7 @@
 import { Queuer } from "@tanstack/pacer";
 
-import {
-  type AppearanceSource,
-  STAGE_TIME_WINDOW_MS,
-  getAppearanceLog,
-} from "./appearanceLog";
+import { type AppearanceSource, getAppearanceLog } from "./appearanceLog";
+import { pickForRotation } from "./stageTime";
 
 type Tier = "kiosk" | "mobile";
 type QueueSource = "kiosk" | "mobile" | "rotation" | "resume";
@@ -49,11 +46,8 @@ type ChannelState = {
   stageListeners: Set<(s: StageSnapshot) => void>;
 };
 
-const DWELL_MS = Number(process.env.DWELL_MS ?? 30000);
+export const DWELL_MS = Number(process.env.DWELL_MS ?? 30000);
 const MIN_QUEUE = 3;
-/** Random pick happens within the N least-Stage-Time students. Bigger = feels
- *  more random, smaller = stricter fairness. 1 = pure least Stage Time first. */
-const ROTATION_WINDOW = 12;
 
 const PRIORITY = {
   resume: 400,
@@ -124,13 +118,6 @@ function emitStage(ch: ChannelState): void {
   for (const l of ch.stageListeners) l(snap);
 }
 
-export type RotationProvider = () => Promise<string[]>;
-let rotationProvider: RotationProvider = async () => [];
-
-export function setRotationProvider(fn: RotationProvider): void {
-  rotationProvider = fn;
-}
-
 function queuedIds(ch: ChannelState): Set<string> {
   return new Set(ch.queuer.peekAllItems().map((i) => i.studentUserId));
 }
@@ -162,24 +149,9 @@ function dropPreempters(ch: ChannelState): void {
 }
 
 async function nextRotationCandidate(ch: ChannelState): Promise<string | null> {
-  const eligible = await rotationProvider();
-  if (eligible.length === 0) return null;
   const exclude = queuedIds(ch);
   if (ch.current) exclude.add(ch.current.studentUserId);
-
-  const pool = eligible.filter((id) => !exclude.has(id));
-  if (pool.length === 0) return null;
-
-  // Sort by ascending Stage Time over the rolling window (never-shown = 0 = top),
-  // then pick randomly within the top ROTATION_WINDOW. ADR-0011.
-  const sinceMs = Date.now() - STAGE_TIME_WINDOW_MS;
-  const stageTime = await getAppearanceLog().stageTimeIn(pool, sinceMs);
-  const scored = pool
-    .map((id) => ({ id, ms: stageTime.get(id) ?? 0 }))
-    .sort((a, b) => a.ms - b.ms);
-
-  const window = Math.min(scored.length, ROTATION_WINDOW);
-  return scored[Math.floor(Math.random() * window)]!.id;
+  return pickForRotation(exclude);
 }
 
 async function topUp(ch: ChannelState): Promise<void> {
@@ -336,5 +308,24 @@ export function subscribeStage(
   }
   return () => {
     ch.stageListeners.delete(cb);
+    if (ch.stageListeners.size === 0) {
+      // No Stage audience: pause the Stage clock. Stage Time is the
+      // attention-given signal (ADR-0011), not a wall clock — without
+      // anyone watching, the in-flight Student should stop accruing it.
+      // Cancel the dwell timer and close any open Appearance row. The
+      // queue itself is preserved; a reconnecting Stage re-advances
+      // from the head on its next subscribeStage.
+      if (ch.timer) {
+        clearTimeout(ch.timer);
+        ch.timer = null;
+      }
+      if (ch.current) {
+        const log = getAppearanceLog();
+        const old = ch.current;
+        ch.current = null;
+        void log.end(old.appearanceId);
+        emitStage(ch);
+      }
+    }
   };
 }

@@ -8,10 +8,7 @@ import { z } from "zod";
 
 import { getAssetStore } from "../assetStore";
 import { protectedProcedure, publicProcedure, router } from "../index";
-import {
-  STAGE_TIME_WINDOW_MS,
-  getAppearanceLog,
-} from "../queue/appearanceLog";
+import { rankForCompanion } from "../queue/stageTime";
 import {
   type StudentUpdate,
   emitStudentUpdate,
@@ -31,16 +28,14 @@ export type StudentSummary = {
   workMediaUrl: string | null;
   workMediaKind: "work-image" | "work-video" | null;
   competencies: string[];
-  /** Sum of on-Stage ms in the last STAGE_TIME_WINDOW_MS. Populated by
-   *  listEligible; sentinel `0` from single-Student fetches. ADR-0011. */
+  /** Sum of on-Stage ms in the rolling Stage Time window. Populated by
+   *  listEligible via the Stage Time module; sentinel `0` from single-
+   *  Student fetches. ADR-0011. */
   stageTimeMs: number;
   /** True when this Student sits in the top decile by Stage Time and should
    *  be hidden from the Companion list while no filter is active. */
   hideWhenIdle: boolean;
 };
-
-/** Fraction of the eligible cohort hidden from the Companion list when idle. */
-const COMPANION_HIDE_DECILE = 0.1;
 
 export type MyProfile = {
   userId: string;
@@ -143,28 +138,7 @@ export const studentRouter = router({
       };
     });
     const complete = all.filter(isComplete);
-
-    // Stage Time ranking (ADR-0011): least Stage Time first; hide the top
-    // decile from the Companion list while no filter is active.
-    const sinceMs = Date.now() - STAGE_TIME_WINDOW_MS;
-    const stageTime = await getAppearanceLog().stageTimeIn(
-      complete.map((s) => s.userId),
-      sinceMs,
-    );
-    for (const s of complete) {
-      s.stageTimeMs = stageTime.get(s.userId) ?? 0;
-    }
-    complete.sort((a, b) => a.stageTimeMs - b.stageTimeMs);
-
-    const hideCount = Math.floor(complete.length * COMPANION_HIDE_DECILE);
-    if (hideCount > 0) {
-      const firstHiddenIdx = complete.length - hideCount;
-      for (let i = firstHiddenIdx; i < complete.length; i += 1) {
-        if (complete[i]!.stageTimeMs > 0) {
-          complete[i]!.hideWhenIdle = true;
-        }
-      }
-    }
+    await rankForCompanion(complete);
     return complete;
   }),
 

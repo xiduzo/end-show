@@ -15,7 +15,7 @@ import {
 import { getAssetStore } from "../assetStore";
 import { router, staffProcedure } from "../index";
 import { emitStudentUpdate } from "../studentEvents";
-import { defaultStageColor, draftLink, type StageColor } from "./student";
+import { defaultStageColor, draftLink, trackSchema, type StageColor, type Track } from "./student";
 
 const stageColorSchema = z.enum(["slime", "crayon", "bubblegum"]);
 
@@ -26,6 +26,7 @@ const profileInput = z.object({
   link: draftLink,
   competencies: z.array(z.string().trim().min(1).max(18)).max(5),
   stageColor: stageColorSchema.nullable(),
+  track: trackSchema,
 });
 
 export const adminRouter = router({
@@ -175,6 +176,7 @@ export const adminRouter = router({
           displayName: s?.displayName ?? "",
           pronouns: s?.pronouns ?? "",
           link: s?.link ?? "",
+          track: (s?.track as Track | undefined) ?? "IxD",
           competencies: comps,
           workMediaKind,
           workMediaUrl,
@@ -226,6 +228,7 @@ export const adminRouter = router({
         link: s?.link ?? "",
         competencies: comps.map((c) => c.tag),
         stageColor: (s?.stageColor as StageColor | null) ?? null,
+        track: (s?.track as Track | undefined) ?? "IxD",
         portraitUrl: portrait ? getAssetStore().publicUrl(portrait.r2Key) : null,
         workMediaUrl: work ? getAssetStore().publicUrl(work.r2Key) : null,
         workMediaKind:
@@ -325,6 +328,7 @@ export const adminRouter = router({
       z.object({
         name: z.string().trim().min(1).max(80),
         email: z.string().trim().toLowerCase().email().max(200),
+        track: trackSchema.default("IxD"),
       }),
     )
     .mutation(async ({ input }) => {
@@ -345,7 +349,7 @@ export const adminRouter = router({
       });
       await db
         .insert(student)
-        .values({ userId, stageColor: defaultStageColor(userId) });
+        .values({ userId, stageColor: defaultStageColor(userId), track: input.track });
       emitStudentUpdate(userId);
       try {
         await sendStudentInviteEmail({ to: input.email, name: input.name });
@@ -404,6 +408,7 @@ export const adminRouter = router({
           introduction: rest.introduction,
           link: rest.link,
           stageColor: rest.stageColor,
+          track: rest.track,
         });
       } else {
         await db
@@ -414,6 +419,7 @@ export const adminRouter = router({
             introduction: rest.introduction,
             link: rest.link,
             stageColor: rest.stageColor,
+            track: rest.track,
             updatedAt: new Date(),
           })
           .where(eq(student.userId, userId));

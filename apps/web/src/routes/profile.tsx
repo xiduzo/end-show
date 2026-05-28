@@ -40,6 +40,7 @@ function ProfileRoute() {
     link: profile.data?.link ?? "",
     competencies: profile.data?.competencies ?? [],
     stageColor: profile.data?.stageColor ?? null,
+    track: profile.data?.track ?? "IxD",
     portraitUrl: profile.data?.portraitUrl ?? null,
     workMediaUrl: profile.data?.workMediaUrl ?? null,
     workMediaKind: profile.data?.workMediaKind ?? null,

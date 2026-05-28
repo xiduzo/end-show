@@ -12,6 +12,7 @@ export const student = sqliteTable("student", {
   introduction: text("introduction").notNull().default(""),
   link: text("link").notNull().default(""),
   stageColor: text("stage_color"),
+  track: text("track").notNull().default("IxD"),
   portraitAssetId: text("portrait_asset_id"),
   workMediaAssetId: text("work_media_asset_id"),
   createdAt: integer("created_at", { mode: "timestamp_ms" })

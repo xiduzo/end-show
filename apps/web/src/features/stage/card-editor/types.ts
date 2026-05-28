@@ -1,4 +1,4 @@
-import type { StageColor } from "@end-show/api/routers/student";
+import type { StageColor, Track } from "@end-show/api/routers/student";
 
 export type CardEditorProfile = {
   userId: string;
@@ -8,6 +8,7 @@ export type CardEditorProfile = {
   link: string;
   competencies: string[];
   stageColor: StageColor | null;
+  track: Track;
   portraitUrl: string | null;
   workMediaUrl: string | null;
   workMediaKind: "work-image" | "work-video" | null;
@@ -22,6 +23,7 @@ export type CardEditorDraft = {
   link: string;
   competencies: string[];
   stageColor: StageColor | null;
+  track: Track;
 };
 
 export const ONE_LINER_MAX = 80;

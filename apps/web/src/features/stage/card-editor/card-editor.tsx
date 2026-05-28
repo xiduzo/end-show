@@ -77,6 +77,7 @@ export function CardEditor({
     link: profile.link,
     competencies: profile.competencies.slice(0, COMP_MAX),
     stageColor: profile.stageColor,
+    track: profile.track,
   });
   const lastSyncedUserId = useRef(profile.userId);
   useEffect(() => {
@@ -89,6 +90,7 @@ export function CardEditor({
         link: profile.link,
         competencies: profile.competencies.slice(0, COMP_MAX),
         stageColor: profile.stageColor,
+        track: profile.track,
       });
     }
   }, [profile]);
@@ -215,6 +217,7 @@ export function CardEditor({
     introduction: draft.introduction,
     link: draft.link,
     stageColor: draft.stageColor,
+    track: draft.track,
     portraitUrl: profile.portraitUrl,
     workMediaUrl: profile.workMediaUrl,
     workMediaKind: profile.workMediaKind,
@@ -375,6 +378,27 @@ export function CardEditor({
                       className={inputCls}
                     />
                   </Field>
+                  {mode === "staff" && (
+                    <Field label="Track" required>
+                      <div className="flex gap-2">
+                        {(["IxD", "DFT"] as const).map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => update("track", t)}
+                            className={cn(
+                              "rounded-md border px-4 py-2 font-display text-base font-bold tracking-wider transition",
+                              draft.track === t
+                                ? "border-lego-dark bg-lego-dark text-chalkboard"
+                                : "border-lego-dark/20 bg-white text-lego-dark/60 hover:text-lego-dark",
+                            )}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                    </Field>
+                  )}
                   <Field label="Portfolio link" hint="Optional">
                     <input
                       value={draft.link}

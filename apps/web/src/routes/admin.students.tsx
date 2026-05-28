@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
 import { TopBar } from "@/shell";
+import { TrackStamp } from "@/features/companion/track-stamp";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@end-show/ui/lib/utils";
 
@@ -21,6 +22,7 @@ type StudentRow = {
   displayName: string;
   pronouns: string;
   link: string;
+  track: "IxD" | "DFT";
   competencies: string[];
   workMediaKind: "work-image" | "work-video" | null;
   workMediaUrl: string | null;
@@ -36,6 +38,7 @@ type Filter = "all" | "complete" | "incomplete" | "over-budget";
 
 type SortKey =
   | "name"
+  | "track"
   | "competencies"
   | "showcase"
   | "link"
@@ -127,6 +130,7 @@ function toCsv(rows: StudentRow[]): string {
     "name",
     "email",
     "pronouns",
+    "track",
     "status",
     "competencies",
     "link",
@@ -141,6 +145,7 @@ function toCsv(rows: StudentRow[]): string {
       r.displayName || r.name,
       r.email,
       r.pronouns,
+      r.track,
       r.isComplete ? "complete" : r.hasProfile ? "incomplete" : "no-profile",
       r.competencies.join("|"),
       r.link,
@@ -188,6 +193,7 @@ function AdminStudentsRoute() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteTrack, setInviteTrack] = useState<"IxD" | "DFT">("IxD");
 
   const rows: StudentRow[] = list.data ?? [];
 
@@ -225,6 +231,8 @@ function AdminStudentsRoute() {
             (a.displayName || a.name).localeCompare(b.displayName || b.name) *
             dir
           );
+        case "track":
+          return a.track.localeCompare(b.track) * dir;
         case "competencies":
           return (a.competencies.length - b.competencies.length) * dir;
         case "showcase": {
@@ -268,7 +276,7 @@ function AdminStudentsRoute() {
     else {
       setSortKey(key);
       setSortDir(
-        key === "name" || key === "link" || key === "status" ? "asc" : "desc",
+        key === "name" || key === "link" || key === "status" || key === "track" ? "asc" : "desc",
       );
     }
   };
@@ -302,6 +310,7 @@ function AdminStudentsRoute() {
     setInviteOpen(false);
     setInviteName("");
     setInviteEmail("");
+    setInviteTrack("IxD");
   };
 
   const handleInviteSubmit = async (e: React.FormEvent) => {
@@ -310,7 +319,7 @@ function AdminStudentsRoute() {
     const email = inviteEmail.trim();
     if (!name || !email) return;
     try {
-      await createStudent.mutateAsync({ name, email });
+      await createStudent.mutateAsync({ name, email, track: inviteTrack });
       toast.success(`${name} added`);
       closeInvite();
     } catch (err) {
@@ -466,7 +475,7 @@ function AdminStudentsRoute() {
         )}
 
         <div className="mt-6 overflow-x-auto rounded-lg border border-ink/15 bg-white">
-          <div className="grid min-w-[1200px] grid-cols-[40px_minmax(180px,1.6fr)_minmax(140px,1fr)_100px_minmax(140px,1fr)_minmax(160px,1fr)_120px_120px] items-center gap-3 rounded-t-lg bg-lego px-4 py-3 text-xs tracking-[0.2em] uppercase text-chalkboard/70">
+          <div className="grid min-w-[1200px] grid-cols-[40px_minmax(180px,1.6fr)_70px_minmax(140px,1fr)_100px_minmax(140px,1fr)_minmax(160px,1fr)_120px_120px] items-center gap-3 rounded-t-lg bg-lego px-4 py-3 text-xs tracking-[0.2em] uppercase text-chalkboard/70">
             <input
               type="checkbox"
               checked={allOnPageSelected}
@@ -479,6 +488,13 @@ function AdminStudentsRoute() {
               className="text-left hover:text-chalkboard"
             >
               name{arrow("name")}
+            </button>
+            <button
+              type="button"
+              onClick={() => onToggleSort("track")}
+              className="text-left hover:text-chalkboard"
+            >
+              Track{arrow("track")}
             </button>
             <button
               type="button"
@@ -627,6 +643,27 @@ function AdminStudentsRoute() {
               className="mt-1 h-10 w-full rounded-md border border-ink/20 bg-white px-3 text-sm focus:border-ink/50 focus:outline-none"
             />
 
+            <label className="mt-4 block text-xs tracking-[0.2em] uppercase text-ink/60">
+              Track
+            </label>
+            <div className="mt-1 flex gap-2">
+              {(["IxD", "DFT"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setInviteTrack(t)}
+                  className={
+                    "flex-1 h-10 rounded-md border font-display text-base font-bold tracking-wider transition " +
+                    (inviteTrack === t
+                      ? "border-ink bg-ink text-chalkboard"
+                      : "border-ink/20 bg-white text-ink/60 hover:text-ink")
+                  }
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+
             <div className="mt-6 flex items-center justify-end gap-2">
               <button
                 type="button"
@@ -759,7 +796,7 @@ function Row({
           };
 
   return (
-    <li className="relative grid min-w-[1200px] grid-cols-[40px_minmax(180px,1.6fr)_minmax(140px,1fr)_100px_minmax(140px,1fr)_minmax(160px,1fr)_120px_120px] items-center gap-3 bg-white px-4 py-3 text-sm hover:bg-ink/[0.02]">
+    <li className="relative grid min-w-[1200px] grid-cols-[40px_minmax(180px,1.6fr)_70px_minmax(140px,1fr)_100px_minmax(140px,1fr)_minmax(160px,1fr)_120px_120px] items-center gap-3 bg-white px-4 py-3 text-sm hover:bg-ink/[0.02]">
       <Link
         to="/admin/students/$userId"
         params={{ userId: row.userId }}
@@ -801,6 +838,10 @@ function Row({
             </span>
           )}
         </span>
+      </div>
+
+      <div className="relative z-10">
+        <TrackStamp track={row.track} seed={row.userId} size="sm" />
       </div>
 
       <div

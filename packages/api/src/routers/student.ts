@@ -17,6 +17,8 @@ import {
 
 export type StageColor = "slime" | "crayon" | "bubblegum";
 
+export type Track = "IxD" | "DFT";
+
 export type StudentSummary = {
   userId: string;
   displayName: string;
@@ -24,6 +26,7 @@ export type StudentSummary = {
   introduction: string;
   link: string;
   stageColor: StageColor | null;
+  track: Track;
   portraitUrl: string | null;
   workMediaUrl: string | null;
   workMediaKind: "work-image" | "work-video" | null;
@@ -44,6 +47,7 @@ export type MyProfile = {
   introduction: string;
   link: string;
   stageColor: StageColor | null;
+  track: Track;
   competencies: string[];
   portraitUrl: string | null;
   workMediaUrl: string | null;
@@ -61,6 +65,7 @@ function isComplete(s: Omit<StudentSummary, "portraitUrl" | "workMediaUrl" | "wo
 }
 
 const stageColorSchema = z.enum(["slime", "crayon", "bubblegum"]);
+export const trackSchema = z.enum(["IxD", "DFT"]);
 
 const STAGE_COLORS: readonly StageColor[] = ["slime", "crayon", "bubblegum"];
 
@@ -128,6 +133,7 @@ export const studentRouter = router({
         introduction: r.introduction,
         link: r.link,
         stageColor: (r.stageColor as StageColor | null) ?? null,
+        track: (r.track as Track | undefined) ?? "IxD",
         portraitUrl: portrait ? getAssetStore().publicUrl(portrait.r2Key) : null,
         workMediaUrl: work ? getAssetStore().publicUrl(work.r2Key) : null,
         workMediaKind:
@@ -177,6 +183,7 @@ export const studentRouter = router({
         introduction: row.introduction,
         link: row.link,
         stageColor: (row.stageColor as StageColor | null) ?? null,
+        track: (row.track as Track | undefined) ?? "IxD",
         competencies: comps.map((c) => c.tag),
         portraitUrl: portraitRow
           ? getAssetStore().publicUrl(portraitRow.r2Key)
@@ -219,6 +226,7 @@ export const studentRouter = router({
       introduction: row.introduction,
       link: row.link,
       stageColor: (row.stageColor as StageColor | null) ?? null,
+      track: (row.track as Track | undefined) ?? "IxD",
       competencies: comps.map((c) => c.tag),
       portraitUrl: portraitRow ? getAssetStore().publicUrl(portraitRow.r2Key) : null,
       workMediaUrl: workRow ? getAssetStore().publicUrl(workRow.r2Key) : null,

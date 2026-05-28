@@ -6,8 +6,9 @@ import { useEffect, useState } from "react";
 
 import { STAGE_PALETTE } from "@/features/stage";
 import { useBookLayout } from "./book-layout";
+import { TrackStamp } from "./track-stamp";
 import type { CompanionTier } from "./types";
-import { DEFAULT_ACCENT, hash, initials, rand, STICKER_TONES } from "./wonk";
+import { DEFAULT_ACCENT, hash, initials, rand } from "./wonk";
 
 export function WallShowcase({
   tier,
@@ -82,8 +83,6 @@ export function WallShowcase({
     : DEFAULT_ACCENT;
 
   const seed = hash(student.userId);
-  const competency = student.competencies[0];
-  const sticker = STICKER_TONES[hash(competency ?? "x") % STICKER_TONES.length];
   const stickerTilt = rand(seed, 4) * 6;
   const stickerLeft = 12 + rand(seed, 5) * 14;
 
@@ -177,21 +176,15 @@ export function WallShowcase({
           boxShadow: `0 30px 90px ${palette.dark}b3`,
         }}
       >
-        {competency && (
-          <span
-            className={cn(
-              "absolute -top-2 z-20 rounded-sm px-2 py-0.5 font-mono text-xs font-bold tracking-wider shadow-md",
-              sticker.bg,
-              sticker.fg,
-            )}
-            style={{
-              left: stickerLeft,
-              transform: `rotate(${stickerTilt}deg)`,
-            }}
-          >
-            {competency}
-          </span>
-        )}
+        <span
+          className="absolute -top-3 z-20"
+          style={{
+            left: stickerLeft,
+            transform: `rotate(${stickerTilt}deg)`,
+          }}
+        >
+          <TrackStamp track={student.track} seed={student.userId} size="lg" />
+        </span>
 
         <motion.div
           className="absolute overflow-hidden"

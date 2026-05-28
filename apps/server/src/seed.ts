@@ -189,6 +189,7 @@ export async function seedStudents(): Promise<void> {
       introduction,
       link,
       stageColor,
+      track: i % 2 === 0 ? ("IxD" as const) : ("DFT" as const),
       portraitAssetId,
       workMediaAssetId: workAssetId,
     });

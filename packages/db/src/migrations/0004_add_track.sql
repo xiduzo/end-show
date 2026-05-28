@@ -1,0 +1,1 @@
+ALTER TABLE `student` ADD COLUMN `track` TEXT NOT NULL DEFAULT 'IxD';

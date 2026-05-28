@@ -4,7 +4,8 @@ import { motion, useInView } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { STAGE_PALETTE } from "@/features/stage";
-import { DEFAULT_ACCENT, hash, initials, rand, STICKER_TONES } from "./wonk";
+import { TrackStamp } from "./track-stamp";
+import { DEFAULT_ACCENT, hash, initials, rand } from "./wonk";
 
 const DEVELOP_CLEAR =
   "brightness(1) contrast(1) saturate(1) hue-rotate(0deg) blur(0px)";
@@ -37,10 +38,9 @@ export function Polaroid({
   const palette = student.stageColor
     ? STAGE_PALETTE[student.stageColor]
     : DEFAULT_ACCENT;
-  const competency = student.competencies[0];
-  const sticker = STICKER_TONES[hash(competency ?? "x") % STICKER_TONES.length];
-  const stickerTilt = rand(seed, 4) * 14;
-  const stickerLeft = 12 + rand(seed, 5) * 18;
+  const track = student.track;
+  const trackTilt = rand(seed, 4) * 8;
+  const trackLeft = 14 + rand(seed, 5) * 12;
   const captionTilt = rand(seed, 7) * 2.5;
 
   // Per-card develop timing — duration, the two intermediate "wet" stops, and
@@ -87,21 +87,15 @@ export function Polaroid({
         )}
         style={{ width }}
       >
-        {competency && (
-          <span
-            className={cn(
-              "absolute -top-2 z-10 rounded-sm px-2 py-0.5 font-mono text-xs font-bold tracking-wider shadow-md",
-              sticker.bg,
-              sticker.fg,
-            )}
-            style={{
-              left: stickerLeft,
-              transform: `rotate(${stickerTilt}deg)`,
-            }}
-          >
-            {competency}
-          </span>
-        )}
+        <span
+          className="absolute -top-3 z-10"
+          style={{
+            left: trackLeft,
+            transform: `rotate(${trackTilt}deg)`,
+          }}
+        >
+          <TrackStamp track={track} seed={student.userId} size="md" />
+        </span>
 
         <motion.div
           data-polaroid-image

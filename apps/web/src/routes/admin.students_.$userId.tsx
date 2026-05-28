@@ -44,6 +44,7 @@ function AdminStudentEdit() {
         link: data.data.link,
         competencies: data.data.competencies,
         stageColor: data.data.stageColor,
+        track: data.data.track,
         portraitUrl: data.data.portraitUrl,
         workMediaUrl: data.data.workMediaUrl,
         workMediaKind: data.data.workMediaKind,

@@ -216,7 +216,7 @@ function Avatar({
         <DesatCrossfade
           src={student.portraitUrl}
           alt={student.displayName}
-          className="h-full w-full object-cover"
+          className="h-full w-full object-cover object-top"
           durationMs={1200}
           brightnessLift
         />

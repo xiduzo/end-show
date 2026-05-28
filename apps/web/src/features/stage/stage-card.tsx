@@ -37,13 +37,13 @@ function CurrentStage({ student }: { student: StudentSummary }) {
 
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-5 h-[35%] transition-[background-color] duration-700 ease-out"
+        className="pointer-events-none absolute inset-x-0 bottom-0 z-5 h-[50%] transition-[background-color] duration-700 ease-out"
         style={{
           backgroundColor: scrim.dark,
           maskImage:
-            "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.75) 30%, rgba(0,0,0,0) 100%)",
+            "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.88) 20%, rgba(0,0,0,0.7) 40%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.2) 80%, rgba(0,0,0,0.05) 92%, rgba(0,0,0,0) 100%)",
           WebkitMaskImage:
-            "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.75) 30%, rgba(0,0,0,0) 100%)",
+            "linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.88) 20%, rgba(0,0,0,0.7) 40%, rgba(0,0,0,0.45) 60%, rgba(0,0,0,0.2) 80%, rgba(0,0,0,0.05) 92%, rgba(0,0,0,0) 100%)",
         }}
       />
       <div
@@ -226,7 +226,7 @@ function Avatar({
 
   return (
     <div
-      className="relative flex items-center justify-center overflow-hidden rounded-full bg-chalkboard/95"
+      className="relative flex items-center justify-center overflow-hidden rounded-4xl bg-chalkboard/95"
       style={{
         width: size,
         height: size,

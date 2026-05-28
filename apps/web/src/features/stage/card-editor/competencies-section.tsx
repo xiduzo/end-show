@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
+import { Field } from "./field";
 import { Highlight } from "./highlight";
 import { COMP_MAX, COMP_TAG_MAX } from "./types";
 
@@ -14,23 +15,16 @@ export function CompetenciesSection({
 }) {
   const [input, setInput] = useState("");
   const [focused, setFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const matches = useMemo(() => {
     const q = input.trim().toLowerCase();
-    if (!q) return [];
-    return cohort
-      .filter(
-        (t) => t.tag.toLowerCase().includes(q) && !competencies.includes(t.tag),
-      )
-      .slice(0, 5);
+    const pool = cohort.filter((t) => !competencies.includes(t.tag));
+    if (!q) return pool.slice(0, 8);
+    return pool.filter((t) => t.tag.toLowerCase().includes(q)).slice(0, 8);
   }, [input, cohort, competencies]);
 
-  const suggestions = useMemo(
-    () => cohort.filter((t) => !competencies.includes(t.tag)).slice(0, 14),
-    [cohort, competencies],
-  );
-
-  const exactMatch = matches.some(
+  const exactMatch = cohort.some(
     (m) => m.tag.toLowerCase() === input.trim().toLowerCase(),
   );
 
@@ -40,175 +34,111 @@ export function CompetenciesSection({
       return;
     onChange([...competencies, t]);
     setInput("");
+    inputRef.current?.focus();
   };
 
   const remove = (tag: string) =>
     onChange(competencies.filter((c) => c !== tag));
 
-  const remaining = COMP_MAX - competencies.length;
+  const atMax = competencies.length >= COMP_MAX;
+  const showDropdown = focused && !atMax;
 
   return (
-    <section className="border-t border-lego-dark/15 bg-lego-dark/[0.03]">
-      <div className="mx-auto container py-10">
-        <div className="grid grid-cols-1 gap-10 lg:grid-cols-[2fr_1fr]">
-          <div>
-            <p className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
-              competencies <span className="text-slide">*</span>
-            </p>
-            <h2 className="mt-2 font-display text-3xl font-bold tracking-tight">
-              What are you <span className="bg-slime/60 px-1">known for</span>?
-            </h2>
-            <p className="mt-2 max-w-md font-mono text-sm text-lego-dark/70">
-              Pick up to five. Type whatever you like — your cohort's tags
-              appear as you type, but you're never locked into them.
-            </p>
-
-            <p className="mt-6 font-mono text-xs tracking-widest text-lego-dark/50 uppercase">
-              your competencies
-            </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {competencies.length === 0 ? (
-                <span className="font-mono text-xs italic text-lego-dark/40">
-                  nothing picked yet · add your first below ↓
-                </span>
-              ) : (
-                competencies.map((c) => (
-                  <button
-                    type="button"
-                    key={c}
-                    onClick={() => remove(c)}
-                    className="rounded-full bg-lego-dark px-3 py-1 font-mono text-xs text-chalkboard hover:bg-slide"
-                  >
-                    {c} ×
-                  </button>
-                ))
-              )}
-            </div>
-
-            <p className="mt-6 font-mono text-xs tracking-widest text-lego-dark/50 uppercase">
-              add a competency
-              {input && (
-                <span className="ml-2 text-lego-dark/40">· typing</span>
-              )}
-            </p>
-            <div className="relative mt-2 max-w-md">
-              <div className="flex items-center gap-2 rounded-full border border-lego-dark/30 bg-white px-3 py-2">
-                <span className="font-mono text-slide">+</span>
-                <input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onFocus={() => setFocused(true)}
-                  onBlur={() => setTimeout(() => setFocused(false), 150)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      if (matches[0]) add(matches[0].tag);
-                      else if (input.trim()) add(input.trim());
-                    }
-                  }}
-                  disabled={competencies.length >= COMP_MAX}
-                  placeholder={
-                    competencies.length >= COMP_MAX
-                      ? "you're at 5 / 5 — remove one to add another"
-                      : "type to add — or click a suggestion →"
-                  }
-                  className="flex-1 bg-transparent font-mono text-sm placeholder:text-lego-dark/30 focus:outline-none"
-                  maxLength={COMP_TAG_MAX}
-                />
-                <span className="font-mono text-xs text-lego-dark/40">
-                  {remaining} of {COMP_MAX} left
-                </span>
-              </div>
-
-              {focused && input.trim() && (
-                <div className="absolute top-full right-0 left-0 z-20 mt-1 rounded-md border border-lego-dark/20 bg-white shadow-lg">
-                  <p className="border-b border-lego-dark/10 px-3 py-2 font-mono text-xs tracking-widest text-lego-dark/50 uppercase">
-                    matches from your cohort
-                  </p>
-                  {matches.length > 0 ? (
-                    matches.map((m) => (
-                      <button
-                        type="button"
-                        key={m.tag}
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          add(m.tag);
-                        }}
-                        className="flex w-full items-center justify-between px-3 py-2 text-left font-mono text-sm hover:bg-lego-dark/5"
-                      >
-                        <span>
-                          <Highlight text={m.tag} query={input} />
-                        </span>
-                        <span className="text-xs text-lego-dark/40">
-                          {m.count} {m.count === 1 ? "student" : "students"} in
-                          your cohort
-                        </span>
-                      </button>
-                    ))
-                  ) : (
-                    <p className="px-3 py-2 font-mono text-xs italic text-lego-dark/40">
-                      no matches yet
-                    </p>
-                  )}
-                  {!exactMatch && input.trim() && (
-                    <button
-                      type="button"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        add(input.trim());
-                      }}
-                      className="flex w-full items-center justify-between border-t border-dashed border-lego-dark/15 px-3 py-2 font-mono text-xs text-lego-dark/70 hover:bg-lego-dark/5"
-                    >
-                      <span>
-                        <span className="text-slide">+</span> add "
-                        {input.trim()}" as a new tag — only you
-                      </span>
-                      <span className="text-xs">shift + ↵</span>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-baseline justify-between">
-              <p className="font-mono text-xs tracking-widest text-lego-dark/50 uppercase">
-                your cohort is using
-              </p>
-              <p className="font-mono text-xs text-lego-dark/40">
-                click to add
-              </p>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {suggestions.length === 0 ? (
-                <span className="font-mono text-xs italic text-lego-dark/40">
-                  no one in your cohort has added tags yet
-                </span>
-              ) : (
-                suggestions.map((s) => (
-                  <button
-                    type="button"
-                    key={s.tag}
-                    onClick={() => add(s.tag)}
-                    disabled={competencies.length >= COMP_MAX}
-                    className="rounded-full border border-lego-dark/25 bg-white px-2.5 py-0.5 font-mono text-xs text-lego-dark hover:border-slide hover:text-slide disabled:opacity-40"
-                  >
-                    {s.tag}{" "}
-                    <span className="text-xs text-lego-dark/40">
-                      {s.count}
-                    </span>
-                  </button>
-                ))
-              )}
-            </div>
-            <p className="mt-4 font-mono text-xs text-lego-dark/40">
-              <span className="font-bold">{competencies.length}</span> /{" "}
-              {COMP_MAX} used
-            </p>
-          </div>
+    <Field
+      label="Competencies"
+      required
+      hint={`${competencies.length} / ${COMP_MAX}`}
+    >
+      <div className="relative">
+        <div
+          className="flex flex-wrap items-center gap-1.5 rounded-md border border-lego-dark/20 bg-white px-2 py-1.5 focus-within:border-lego"
+          onClick={() => inputRef.current?.focus()}
+        >
+          {competencies.map((c) => (
+            <button
+              type="button"
+              key={c}
+              onClick={(e) => {
+                e.stopPropagation();
+                remove(c);
+              }}
+              className="rounded-full bg-lego-dark px-2.5 py-0.5 font-mono text-xs text-chalkboard hover:bg-slide"
+            >
+              {c} ×
+            </button>
+          ))}
+          <input
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setTimeout(() => setFocused(false), 150)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                if (matches[0] && input.trim()) add(matches[0].tag);
+                else if (input.trim()) add(input.trim());
+              } else if (
+                e.key === "Backspace" &&
+                !input &&
+                competencies.length > 0
+              ) {
+                remove(competencies[competencies.length - 1]!);
+              }
+            }}
+            disabled={atMax}
+            placeholder={
+              atMax
+                ? "max reached — remove one to add"
+                : competencies.length === 0
+                  ? "type to search your cohorts competencies, or add a new one"
+                  : ""
+            }
+            maxLength={COMP_TAG_MAX}
+            className="min-w-[8rem] flex-1 bg-transparent px-1 py-0.5 font-mono text-sm placeholder:text-lego-dark/30 focus:outline-none"
+          />
         </div>
+
+        {showDropdown && (matches.length > 0 || input.trim()) && (
+          <div className="absolute top-full right-0 left-0 z-20 mt-1 max-h-72 overflow-auto rounded-md border border-lego-dark/20 bg-white shadow-lg">
+            {matches.map((m) => (
+              <button
+                type="button"
+                key={m.tag}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  add(m.tag);
+                }}
+                className="flex w-full items-center justify-between px-3 py-1.5 text-left font-mono text-sm hover:bg-lego-dark/5"
+              >
+                <span>
+                  {input.trim() ? (
+                    <Highlight text={m.tag} query={input} />
+                  ) : (
+                    m.tag
+                  )}
+                </span>
+                <span className="text-xs text-lego-dark/40">{m.count}</span>
+              </button>
+            ))}
+            {input.trim() && !exactMatch && (
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  add(input.trim());
+                }}
+                className="flex w-full items-center justify-between border-t border-dashed border-lego-dark/15 px-3 py-1.5 font-mono text-xs text-lego-dark/70 hover:bg-lego-dark/5"
+              >
+                <span>
+                  <span className="text-slide">+</span> add "{input.trim()}"
+                </span>
+                <span>↵</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
-    </section>
+    </Field>
   );
 }

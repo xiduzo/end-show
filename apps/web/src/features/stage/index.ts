@@ -6,6 +6,7 @@ export type {
   CardEditorProfile,
 } from "./card-editor/card-editor";
 export { ScaledStageCard } from "./scaled-stage-card";
+export { UpNextBadge } from "./up-next-badge";
 export { STAGE_HEIGHT, STAGE_WIDTH, StageCard } from "./stage-card";
 export {
   resolveScrim,

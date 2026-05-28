@@ -7,6 +7,7 @@ export const POOL_DISPLAYED_BYTES = 8 * 1024 * 1024 * 1024; // 8 GB shown to use
 export const POOL_PHYSICAL_BYTES = 10 * 1024 * 1024 * 1024; // 10 GB R2 quota
 export const TRANSFER_FLOOR_BYTES = env.BUDGET_TRANSFER_FLOOR_BYTES;
 export const MAX_LOAN_BYTES = 30 * 1024 * 1024; // 30 MB max per loan request
+export const MAX_ACTIVE_BORROWS = 3;
 
 export type BudgetSnapshot = {
   defaultBytes: number;

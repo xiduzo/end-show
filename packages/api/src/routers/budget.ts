@@ -1,13 +1,15 @@
 import { db } from "@end-show/db";
-import { budgetLoan } from "@end-show/db/schema/asset";
+import { asset, budgetLoan } from "@end-show/db/schema/asset";
 import { user } from "@end-show/db/schema/auth";
 import { student } from "@end-show/db/schema/student";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, inArray, ne, or } from "drizzle-orm";
 import { z } from "zod";
 
+import { getAssetStore } from "../assetStore";
 import {
   computeBudget,
+  MAX_ACTIVE_BORROWS,
   MAX_LOAN_BYTES,
   TRANSFER_FLOOR_BYTES,
 } from "../budget";
@@ -18,6 +20,8 @@ type Peer = {
   name: string;
   email: string;
   displayName: string;
+  portraitUrl: string | null;
+  stageColor: "slime" | "crayon" | "bubblegum" | null;
 };
 
 async function loadPeers(ids: string[]): Promise<Map<string, Peer>> {
@@ -28,20 +32,41 @@ async function loadPeers(ids: string[]): Promise<Map<string, Peer>> {
       name: user.name,
       email: user.email,
       displayName: student.displayName,
+      portraitAssetId: student.portraitAssetId,
+      stageColor: student.stageColor,
     })
     .from(user)
     .leftJoin(student, eq(student.userId, user.id))
     .where(inArray(user.id, ids));
+  const portraitIds = rows
+    .map((r) => r.portraitAssetId)
+    .filter((id): id is string => !!id);
+  const assets =
+    portraitIds.length > 0
+      ? await db.select().from(asset).where(inArray(asset.id, portraitIds))
+      : [];
+  const assetById = new Map(assets.map((a) => [a.id, a]));
+  const store = getAssetStore();
   return new Map(
-    rows.map((r) => [
-      r.id,
-      {
-        id: r.id,
-        name: r.name,
-        email: r.email,
-        displayName: r.displayName ?? "",
-      },
-    ]),
+    rows.map((r) => {
+      const a = r.portraitAssetId ? assetById.get(r.portraitAssetId) : null;
+      return [
+        r.id,
+        {
+          id: r.id,
+          name: r.name,
+          email: r.email,
+          displayName: r.displayName ?? "",
+          portraitUrl: a ? store.publicUrl(a.r2Key) : null,
+          stageColor:
+            r.stageColor === "slime" ||
+            r.stageColor === "crayon" ||
+            r.stageColor === "bubblegum"
+              ? r.stageColor
+              : null,
+        },
+      ];
+    }),
   );
 }
 
@@ -117,7 +142,14 @@ export const budgetRouter = router({
         lender: peers.get(l.fromUserId) ?? null,
       }));
 
-    return { ...budget, incoming, outgoing, activeLent, activeBorrowed };
+    return {
+      ...budget,
+      incoming,
+      outgoing,
+      activeLent,
+      activeBorrowed,
+      maxActiveBorrows: MAX_ACTIVE_BORROWS,
+    };
   }),
 
   listCohortSpare: protectedProcedure.query(async ({ ctx }) => {
@@ -174,6 +206,21 @@ export const budgetRouter = router({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Cannot borrow from yourself",
+        });
+      }
+      const activeOrPending = await db
+        .select({ id: budgetLoan.id })
+        .from(budgetLoan)
+        .where(
+          and(
+            eq(budgetLoan.toUserId, me),
+            inArray(budgetLoan.status, ["pending", "accepted"]),
+          ),
+        );
+      if (activeOrPending.length >= MAX_ACTIVE_BORROWS) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Max ${MAX_ACTIVE_BORROWS} borrows (active + pending). Cancel or return one first.`,
         });
       }
       const lender = await db

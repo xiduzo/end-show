@@ -1,3 +1,4 @@
+import type { StudentSummary } from "@end-show/api/routers/student";
 import { cn } from "@end-show/ui/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
@@ -7,13 +8,14 @@ import { useAssetUpload } from "@/features/assets";
 import { TopBar } from "@/shell";
 import { trpc } from "@/lib/trpc";
 
+import { ScaledStageCard } from "../scaled-stage-card";
+import { UpNextBadge } from "../up-next-badge";
 import { CompetenciesSection } from "./competencies-section";
 import { Field } from "./field";
 import { OneLinerMeter } from "./one-liner-meter";
 import { PortraitColumn } from "./portrait-column";
 import { ShowcaseColumn } from "./showcase-column";
 import { StageColorPicker } from "./stage-color-picker";
-import { StagePreview } from "./stage-preview";
 import {
   COMP_MAX,
   inputCls,
@@ -32,6 +34,23 @@ type Props = {
   onAssetChanged: () => void;
   budgetSlot?: React.ReactNode;
 };
+
+type TabKey =
+  | "identity"
+  | "portrait"
+  | "story"
+  | "work"
+  | "vibe"
+  | "competencies";
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "identity", label: "identity" },
+  { key: "portrait", label: "portrait" },
+  { key: "story", label: "story" },
+  { key: "work", label: "work" },
+  { key: "vibe", label: "vibe" },
+  { key: "competencies", label: "skills" },
+];
 
 export function CardEditor({
   mode,
@@ -82,14 +101,6 @@ export function CardEditor({
     return () => window.clearInterval(id);
   }, []);
 
-  const scheduleSave = (next: CardEditorDraft) => {
-    dirtyRef.current = true;
-    if (saveTimer.current) window.clearTimeout(saveTimer.current);
-    saveTimer.current = window.setTimeout(() => {
-      doSave(next);
-    }, 600);
-  };
-
   const doSave = async (next: CardEditorDraft) => {
     if (inFlightDraft.current) {
       saveTimer.current = window.setTimeout(() => doSave(next), 400);
@@ -112,15 +123,19 @@ export function CardEditor({
     }
   };
 
+  const scheduleSave = (next: CardEditorDraft) => {
+    dirtyRef.current = true;
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => doSave(next), 600);
+  };
+
   const flushSave = async () => {
     if (saveTimer.current) {
       window.clearTimeout(saveTimer.current);
       saveTimer.current = null;
     }
     if (dirtyRef.current) await doSave(draft);
-    while (inFlightDraft.current) {
-      await new Promise((r) => setTimeout(r, 50));
-    }
+    while (inFlightDraft.current) await new Promise((r) => setTimeout(r, 50));
   };
 
   const update = <K extends keyof CardEditorDraft>(
@@ -144,30 +159,68 @@ export function CardEditor({
     targetUserId: mode === "staff" ? profile.userId : undefined,
   });
 
-  const isComplete =
-    draft.displayName.trim() !== "" &&
-    draft.pronouns.trim() !== "" &&
-    draft.introduction.trim() !== "" &&
-    draft.link.trim() !== "" &&
-    profile.portraitUrl !== null &&
-    profile.workMediaUrl !== null &&
-    draft.competencies.length > 0 &&
-    draft.stageColor !== null;
+  const complete = (k: TabKey): boolean => {
+    switch (k) {
+      case "identity":
+        return !!draft.displayName.trim() && !!draft.pronouns.trim();
+      case "portrait":
+        return !!profile.portraitUrl;
+      case "story":
+        return !!draft.introduction.trim();
+      case "work":
+        return !!profile.workMediaUrl;
+      case "vibe":
+        return !!draft.stageColor;
+      case "competencies":
+        return draft.competencies.length > 0;
+    }
+  };
 
-  const isNew =
-    !profile.displayName &&
-    !profile.introduction &&
-    !profile.competencies.length;
+  const [active, setActive] = useState<TabKey>("identity");
+  const [dragOver, setDragOver] = useState(false);
 
-  const statusText = saving
-    ? "saving…"
-    : isNew && !savedAt
-      ? "new profile"
-      : isComplete
-        ? "complete"
-        : "incomplete";
+  const dropKinds =
+    active === "portrait"
+      ? (["portrait"] as const)
+      : active === "work"
+        ? (["work-image", "work-video"] as const)
+        : null;
 
-  const savedText = savedAt ? `saved ${timeAgo(savedAt)}` : null;
+  const onDragOver = (e: React.DragEvent) => {
+    if (!dropKinds) return;
+    if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+    e.preventDefault();
+    setDragOver(true);
+  };
+  const onDragLeave = (e: React.DragEvent) => {
+    if (e.currentTarget === e.target) setDragOver(false);
+  };
+  const onDrop = (e: React.DragEvent) => {
+    if (!dropKinds) return;
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer.files.length) {
+      upload.dropFiles([...dropKinds], e.dataTransfer.files);
+    }
+  };
+
+  const previewStudent = {
+    userId: profile.userId,
+    displayName: draft.displayName,
+    pronouns: draft.pronouns,
+    introduction: draft.introduction,
+    link: draft.link,
+    stageColor: draft.stageColor,
+    portraitUrl: profile.portraitUrl,
+    workMediaUrl: profile.workMediaUrl,
+    workMediaKind: profile.workMediaKind,
+    competencies: draft.competencies,
+  } as StudentSummary;
+
+  const openFullscreen = async () => {
+    await flushSave();
+    window.open(`/stage-preview/${profile.userId}`, "_blank", "noopener");
+  };
 
   return (
     <div className="min-h-screen bg-chalkboard text-lego-dark">
@@ -197,128 +250,197 @@ export function CardEditor({
 
       {budgetSlot}
 
-      <div className="mx-auto container pt-10 pb-8">
-        <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
-          <h1 className="font-display text-5xl font-bold tracking-tight">
-            {isNew ? "Set up your card" : "Edit your card"}
-            <span className="text-slide">.</span>
-          </h1>
-          <div className="flex flex-col items-start gap-1 sm:items-end">
-            <span
-              className={cn(
-                "inline-flex items-center gap-2 rounded-full px-3 py-1.5 font-mono text-xs font-bold tracking-widest uppercase",
-                isComplete
-                  ? "bg-slime text-lego-dark"
-                  : "border-2 border-dashed border-slide text-slide",
-              )}
+      <div className="mx-auto container grid grid-cols-1 gap-6 py-6 pb-16 lg:grid-cols-[1fr_1.1fr]">
+        <aside className="lg:sticky lg:top-4 lg:self-start">
+          <div className="mb-2 flex items-baseline justify-between">
+            <p className="font-mono text-xs tracking-widest text-lego-dark/50 uppercase">
+              preview
+            </p>
+            <button
+              type="button"
+              onClick={openFullscreen}
+              className="font-mono text-xs tracking-widest text-lego-dark/60 uppercase hover:text-slide"
             >
-              <span
-                className={cn(
-                  "inline-block size-2 rounded-full",
-                  isComplete ? "bg-lego-dark" : "animate-pulse bg-slide",
-                )}
-              />
-              {statusText}
-            </span>
-            {savedText && (
-              <span className="font-mono text-xs text-lego-dark/40">
-                {savedText}
-              </span>
-            )}
+              full screen preview ↗
+            </button>
           </div>
-        </div>
-      </div>
-
-      <div className="mx-auto container border-t border-dashed border-lego-dark/15 py-8">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[220px_1fr_1fr]">
-          <PortraitColumn
-            portraitUrl={profile.portraitUrl}
-            busy={upload.busy && upload.activeKind === "portrait"}
-            progress={upload.progress}
-            onPick={() => upload.pickFile("portrait")}
-          />
-
-          <div className="space-y-5">
-            <Field label="Display name" required>
-              <input
-                value={draft.displayName}
-                onChange={(e) => update("displayName", e.target.value)}
-                placeholder="first last"
-                maxLength={80}
-                className={inputCls}
-              />
-            </Field>
-            <Field label="Pronouns" required>
-              <input
-                value={draft.pronouns}
-                onChange={(e) =>
-                  update("pronouns", e.target.value.toUpperCase())
-                }
-                placeholder="THEY/THEM"
-                maxLength={40}
-                className={inputCls}
-              />
-            </Field>
-            <Field
-              label="One-liner"
-              required
-              hint={`${ONE_LINER_MAX} chars · shown under your name on stage`}
-            >
-              <textarea
-                value={draft.introduction}
-                onChange={(e) =>
-                  update("introduction", e.target.value.slice(0, ONE_LINER_MAX))
-                }
-                placeholder="what's the one thing you want people to walk away knowing?"
-                rows={3}
-                className={cn(inputCls, "resize-none leading-snug")}
-              />
-              <OneLinerMeter value={draft.introduction} />
-            </Field>
-            <Field label="Portfolio link" hint="Optional">
-              <div className="flex flex-col items-center gap-2">
-                <input
-                  value={draft.link}
-                  onChange={(e) => update("link", e.target.value)}
-                  placeholder="yoursite.studio/mdd"
-                  maxLength={300}
-                  className={cn(inputCls, "flex-1")}
-                />
-              </div>
-            </Field>
-          </div>
-
-          <div className="space-y-5">
-            <ShowcaseColumn
-              workMediaUrl={profile.workMediaUrl}
-              workMediaKind={profile.workMediaKind}
-              busy={
-                upload.busy &&
-                (upload.activeKind === "work-image" ||
-                  upload.activeKind === "work-video")
-              }
-              progress={upload.progress}
-              onPick={() => upload.pickFile(["work-image", "work-video"])}
-              onPickVideo={() => upload.pickFile("work-video")}
+          <div className="relative aspect-video w-full overflow-hidden rounded-xl shadow-2xl">
+            <ScaledStageCard
+              student={previewStudent}
+              className="absolute inset-0 rounded-lg"
             />
-            <Field label="Stage color" required hint="your backdrop on stage">
-              <StageColorPicker
-                value={draft.stageColor}
-                onChange={(c) => update("stageColor", c)}
-              />
-            </Field>
+            <UpNextBadge
+              student={previewStudent}
+              className="absolute top-3 right-3 z-20 origin-top-right scale-75"
+            />
           </div>
+          <p className="mt-2 font-mono text-xs text-lego-dark/40">
+            {saving
+              ? "saving…"
+              : savedAt
+                ? `last saved ${timeAgo(savedAt)}`
+                : "saves as you go"}
+          </p>
+        </aside>
+
+        <div>
+          <nav
+            className="mb-5 flex flex-wrap gap-1.5 rounded-xl border border-lego-dark/15 bg-lego-dark/[0.03] px-2 py-2"
+            role="tablist"
+          >
+            {TABS.map((t, i) => {
+              const isActive = t.key === active;
+              const isDone = complete(t.key);
+              return (
+                <button
+                  key={t.key}
+                  role="tab"
+                  aria-selected={isActive}
+                  type="button"
+                  onClick={() => setActive(t.key)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-full px-3 py-1.5 font-mono text-xs tracking-widest uppercase transition",
+                    isActive
+                      ? "bg-lego-dark text-chalkboard"
+                      : isDone
+                        ? "bg-slide text-secondary-foreground hover:bg-slide/80"
+                        : "text-lego-dark/60 hover:text-lego-dark",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "flex size-5 items-center justify-center rounded-full font-bold",
+                      isActive
+                        ? "bg-chalkboard text-lego-dark"
+                        : isDone
+                          ? "bg-secondary-foreground/15 text-secondary-foreground"
+                          : "border border-lego-dark/30 text-lego-dark/50",
+                    )}
+                  >
+                    {isDone ? "✓" : i + 1}
+                  </span>
+                  {t.label}
+                </button>
+              );
+            })}
+          </nav>
+
+          <section
+            role="tabpanel"
+            key={active}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
+            className={cn(
+              "relative rounded-xl border border-lego-dark/15 bg-chalkboard/40 p-5 transition",
+              dropKinds && dragOver && "border-slide ring-2 ring-slide/40",
+            )}
+          >
+            {dropKinds && dragOver && (
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-chalkboard/80 font-mono text-xs tracking-widest text-lego-dark uppercase">
+                drop it like its hot
+              </div>
+            )}
+            <div className="space-y-5">
+              {active === "identity" && (
+                <>
+                  <Field label="Display name" required>
+                    <input
+                      value={draft.displayName}
+                      onChange={(e) => update("displayName", e.target.value)}
+                      placeholder="first last"
+                      maxLength={80}
+                      className={inputCls}
+                    />
+                  </Field>
+                  <Field label="Pronouns" required>
+                    <input
+                      value={draft.pronouns}
+                      onChange={(e) =>
+                        update("pronouns", e.target.value.toUpperCase())
+                      }
+                      placeholder="THEY/THEM"
+                      maxLength={40}
+                      className={inputCls}
+                    />
+                  </Field>
+                  <Field label="Portfolio link" hint="Optional">
+                    <input
+                      value={draft.link}
+                      onChange={(e) => update("link", e.target.value)}
+                      placeholder="yoursite.studio/mdd"
+                      maxLength={300}
+                      className={inputCls}
+                    />
+                  </Field>
+                </>
+              )}
+
+              {active === "portrait" && (
+                <div className="max-w-[260px]">
+                  <PortraitColumn
+                    portraitUrl={profile.portraitUrl}
+                    busy={upload.busy && upload.activeKind === "portrait"}
+                    progress={upload.progress}
+                    onPick={() => upload.pickFile("portrait")}
+                  />
+                </div>
+              )}
+
+              {active === "story" && (
+                <Field
+                  label="One-liner"
+                  required
+                  hint={`${ONE_LINER_MAX} chars · shown under your name on stage`}
+                >
+                  <textarea
+                    value={draft.introduction}
+                    onChange={(e) =>
+                      update(
+                        "introduction",
+                        e.target.value.slice(0, ONE_LINER_MAX),
+                      )
+                    }
+                    placeholder="what's the one thing you want people to walk away knowing?"
+                    rows={4}
+                    className={cn(inputCls, "resize-none leading-snug")}
+                  />
+                  <OneLinerMeter value={draft.introduction} />
+                </Field>
+              )}
+
+              {active === "work" && (
+                <ShowcaseColumn
+                  workMediaUrl={profile.workMediaUrl}
+                  workMediaKind={profile.workMediaKind}
+                  busy={
+                    upload.busy &&
+                    (upload.activeKind === "work-image" ||
+                      upload.activeKind === "work-video")
+                  }
+                  progress={upload.progress}
+                  onPick={() => upload.pickFile(["work-image", "work-video"])}
+                  onPickVideo={() => upload.pickFile("work-video")}
+                />
+              )}
+
+              {active === "vibe" && (
+                <StageColorPicker
+                  value={draft.stageColor}
+                  onChange={(c) => update("stageColor", c)}
+                />
+              )}
+
+              {active === "competencies" && (
+                <CompetenciesSection
+                  competencies={draft.competencies}
+                  cohort={cohort.data ?? []}
+                  onChange={(next) => update("competencies", next)}
+                />
+              )}
+            </div>
+          </section>
         </div>
-      </div>
-
-      <CompetenciesSection
-        competencies={draft.competencies}
-        cohort={cohort.data ?? []}
-        onChange={(next) => update("competencies", next)}
-      />
-
-      <div className="mx-auto container border-t border-dashed border-lego-dark/15 py-8">
-        <StagePreview draft={draft} profile={profile} flushSave={flushSave} />
       </div>
     </div>
   );

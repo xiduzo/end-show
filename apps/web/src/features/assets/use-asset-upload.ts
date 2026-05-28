@@ -76,11 +76,9 @@ export function useAssetUpload(opts: {
     }
   };
 
-  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    const kind = file ? resolveKind(candidatesRef.current, file) : null;
-    if (!file || !kind) return;
-    e.target.value = "";
+  const processFile = async (file: File) => {
+    const kind = resolveKind(candidatesRef.current, file);
+    if (!kind) return;
     setActiveKind(kind);
 
     if (kind === "work-video" && stageConfig.data) {
@@ -141,10 +139,29 @@ export function useAssetUpload(opts: {
     }
   };
 
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    await processFile(file);
+  };
+
+  const dropFiles = async (
+    kindOrKinds: AssetKind | AssetKind[],
+    files: FileList | File[],
+  ) => {
+    const file = Array.from(files)[0];
+    if (!file) return;
+    const kinds = Array.isArray(kindOrKinds) ? kindOrKinds : [kindOrKinds];
+    candidatesRef.current = kinds;
+    await processFile(file);
+  };
+
   return {
     inputRef,
     pickFile,
     onFile,
+    dropFiles,
     busy,
     progress,
     activeKind,

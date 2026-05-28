@@ -1,20 +1,18 @@
 import type { StudentSummary } from "@end-show/api/routers/student";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 
 import { ConnectionIndicator } from "@/shell";
-import { MorphingName } from "@/features/text-effects";
 import { QRCodeSVG } from "qrcode.react";
 
 import {
   BackgroundDecor,
-  DesatCrossfade,
   STAGE_HEIGHT,
   STAGE_WIDTH,
   StageCard,
-  resolveScrim,
+  UpNextBadge,
   resolveWorkMedia,
 } from "@/features/stage";
 import { useStageCode } from "@/features/stage";
@@ -151,7 +149,12 @@ function StageRoute() {
         />
       )}
 
-      {displayedNext && <UpNextBadge student={displayedNext} />}
+      {displayedNext && (
+        <UpNextBadge
+          student={displayedNext}
+          className="absolute top-8 right-8 z-20"
+        />
+      )}
 
       {confirmOpen && (
         <ConfirmGenerate
@@ -201,81 +204,6 @@ function DwellBar({
         style={{ width: `${pct}%` }}
       />
     </div>
-  );
-}
-
-function UpNextBadge({ student }: { student: StudentSummary }) {
-  const innerRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState<number | null>(null);
-  const scrim = resolveScrim(student);
-
-  useLayoutEffect(() => {
-    const el = innerRef.current;
-    if (!el) return;
-    const update = () => setWidth(el.offsetWidth);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  return (
-    <div
-      className="absolute top-8 right-8 z-20 overflow-hidden rounded-full backdrop-blur transition-[width,background-color,box-shadow] duration-700 ease-out"
-      style={{
-        ...(width != null ? { width } : {}),
-        backgroundColor: scrim.accent,
-        boxShadow: `0 25px 50px -12px ${scrim.accent}20`,
-      }}
-    >
-      <div
-        ref={innerRef}
-        className="flex w-max items-center gap-3 py-1.5 pr-6 pl-1.5"
-      >
-        <UpNextAvatar student={student} size={42} />
-        <div
-          className="leading-tight transition-colors duration-700"
-          style={{ color: scrim.dark }}
-        >
-          <p className="font-mono text-xs tracking-widest uppercase">Up next</p>
-          <MorphingName
-            text={student.displayName}
-            compact
-            className={cn("font-display font-bold")}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function UpNextAvatar({
-  student,
-  size,
-}: {
-  student: StudentSummary;
-  size: number;
-}) {
-  if (student.portraitUrl) {
-    return (
-      <div
-        className="relative overflow-hidden rounded-full border border-chalkboard/15"
-        style={{ width: size, height: size }}
-      >
-        <DesatCrossfade
-          src={student.portraitUrl}
-          alt={student.displayName}
-          className="h-full w-full object-cover"
-          durationMs={800}
-        />
-      </div>
-    );
-  }
-  return (
-    <div
-      className="relative overflow-hidden rounded-full bg-chalkboard/95"
-      style={{ width: size, height: size }}
-    />
   );
 }
 

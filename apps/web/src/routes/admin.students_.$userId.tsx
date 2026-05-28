@@ -2,11 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { BudgetBar } from "@/features/loans";
-import {
-  ActiveLoanRow,
-  IncomingLoanRequest,
-  OutgoingLoanRow,
-} from "@/features/loans";
 import { CardEditor } from "@/features/stage";
 import { trpc } from "@/lib/trpc";
 
@@ -18,7 +13,6 @@ function AdminStudentEdit() {
   const { userId } = Route.useParams();
   const qc = useQueryClient();
   const data = useQuery(trpc.admin.getStudent.queryOptions({ userId }));
-  const budget = useQuery(trpc.budget.get.queryOptions({ userId }));
   const upsert = useMutation(trpc.admin.upsertStudent.mutationOptions());
 
   if (data.isLoading) {
@@ -39,10 +33,6 @@ function AdminStudentEdit() {
     );
   }
 
-  const currentHeadroom = budget.data
-    ? Math.max(0, budget.data.effectiveBudgetBytes - budget.data.usedBytes)
-    : 0;
-
   return (
     <CardEditor
       mode="staff"
@@ -60,58 +50,7 @@ function AdminStudentEdit() {
         name: data.data.name,
         email: data.data.email,
       }}
-      budgetSlot={
-        <div className="space-y-3">
-          <BudgetBar userId={userId} readOnly />
-          {budget.data?.incoming.map((loan) => (
-            <IncomingLoanRequest
-              key={loan.id}
-              loan={loan}
-              headroomAfterBytes={Math.max(0, currentHeadroom - loan.bytes)}
-              readOnly
-            />
-          ))}
-          {budget.data?.outgoing.map((loan) => (
-            <OutgoingLoanRow
-              key={loan.id}
-              loan={{
-                id: loan.id,
-                bytes: loan.bytes,
-                reason: loan.reason,
-                createdAt: loan.createdAt,
-                lender: loan.lender,
-              }}
-            />
-          ))}
-          {budget.data?.activeLent.map((loan) => (
-            <ActiveLoanRow
-              key={loan.id}
-              direction="lent"
-              loan={{
-                id: loan.id,
-                bytes: loan.bytes,
-                createdAt: loan.createdAt,
-                respondedAt: loan.respondedAt,
-                peer: loan.borrower,
-              }}
-            />
-          ))}
-          {budget.data?.activeBorrowed.map((loan) => (
-            <ActiveLoanRow
-              key={loan.id}
-              direction="borrowed"
-              headroomBytes={currentHeadroom}
-              loan={{
-                id: loan.id,
-                bytes: loan.bytes,
-                createdAt: loan.createdAt,
-                respondedAt: loan.respondedAt,
-                peer: loan.lender,
-              }}
-            />
-          ))}
-        </div>
-      }
+      budgetSlot={<BudgetBar userId={userId} readOnly />}
       onSave={async (draft) => {
         await upsert.mutateAsync({ userId, ...draft });
         await qc.invalidateQueries({

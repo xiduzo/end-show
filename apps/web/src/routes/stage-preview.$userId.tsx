@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 
-import { StageCard } from "@/features/stage";
+import { StageCard, UpNextBadge } from "@/features/stage";
 import { trpc } from "@/lib/trpc";
 import { useStudentUpdates } from "@/lib/use-student-updates";
 
@@ -47,6 +47,10 @@ function StagePreviewRoute() {
   return (
     <div className="relative h-full overflow-hidden">
       <StageCard student={student} />
+      <UpNextBadge
+        student={student}
+        className="absolute top-8 right-8 z-20"
+      />
       <button
         type="button"
         onClick={goBack}

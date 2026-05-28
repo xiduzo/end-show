@@ -25,17 +25,12 @@ function initials(name: string): string {
   );
 }
 
+const AVATAR_PALETTE = ["bg-slime", "bg-crayon", "bg-bubblegum"] as const;
+
 function avatarColor(id: string): string {
-  const palette = [
-    "bg-slime",
-    "bg-crayon",
-    "bg-slide",
-    "bg-bubblegum",
-    "bg-lego",
-  ];
   let h = 0;
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-  return palette[Math.abs(h) % palette.length] ?? "bg-lego";
+  return AVATAR_PALETTE[Math.abs(h) % AVATAR_PALETTE.length] ?? "bg-slime";
 }
 
 export function BorrowDialog({ onClose }: { onClose: () => void }) {
@@ -129,7 +124,7 @@ export function BorrowDialog({ onClose }: { onClose: () => void }) {
               <span>{MAX_MB} MB · max per request</span>
             </div>
 
-            <p className="mt-6 font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
+            {/*<p className="mt-6 font-mono text-xs tracking-widest text-lego-dark/60 uppercase">
               why? · they'll see this
             </p>
             <textarea
@@ -144,7 +139,7 @@ export function BorrowDialog({ onClose }: { onClose: () => void }) {
               <span>
                 {reason.length} / {REASON_MAX}
               </span>
-            </div>
+            </div>*/}
           </div>
 
           {/* Right: peer list */}

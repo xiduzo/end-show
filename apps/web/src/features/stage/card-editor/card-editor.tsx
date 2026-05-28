@@ -65,6 +65,10 @@ export function CardEditor({
       mode === "staff" ? { excludeUserId: profile.userId } : undefined,
     ),
   );
+  const stageConfig = useQuery(trpc.stage.config.queryOptions());
+  const dwellSec = stageConfig.data
+    ? Math.round(stageConfig.data.dwellMs / 1000)
+    : null;
 
   const [draft, setDraft] = useState<CardEditorDraft>({
     displayName: profile.displayName,
@@ -264,7 +268,7 @@ export function CardEditor({
               full screen preview ↗
             </button>
           </div>
-          <div className="relative aspect-video w-full overflow-hidden rounded-xl shadow-2xl">
+          <div className="relative aspect-video w-full overflow-hidden rounded-xl">
             <ScaledStageCard
               student={previewStudent}
               className="absolute inset-0 rounded-lg"
@@ -274,13 +278,20 @@ export function CardEditor({
               className="absolute top-3 right-3 z-20 origin-top-right scale-75"
             />
           </div>
-          <p className="mt-2 font-mono text-xs text-lego-dark/40">
-            {saving
-              ? "saving…"
-              : savedAt
-                ? `last saved ${timeAgo(savedAt)}`
-                : "saves as you go"}
-          </p>
+          <div className="flex justify-between items-center">
+            <p className="mt-2 font-mono text-xs text-lego-dark/40">
+              {saving
+                ? "saving…"
+                : savedAt
+                  ? `last saved ${timeAgo(savedAt)}`
+                  : "saves as you go"}
+            </p>
+            {dwellSec !== null && (
+              <p className="mt-1 font-mono text-xs text-lego-dark/40">
+                you’ll be on stage for {dwellSec} seconds each rotation
+              </p>
+            )}
+          </div>
         </aside>
 
         <div>

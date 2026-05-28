@@ -14,6 +14,7 @@ import {
 } from "../budget";
 import { getAssetStore } from "../assetStore";
 import { router, staffProcedure } from "../index";
+import { isStudentProfileComplete } from "../profileCompleteness";
 import { emitStudentUpdate } from "../studentEvents";
 import { defaultStageColor, draftLink, trackSchema, type StageColor, type Track } from "./student";
 
@@ -160,12 +161,7 @@ export const adminRouter = router({
         const updatedAt = s?.updatedAt ?? u.createdAt;
         const comps = compsByUser.get(u.id) ?? [];
         const isComplete = Boolean(
-          s &&
-            s.displayName &&
-            s.pronouns &&
-            s.introduction &&
-            s.link &&
-            comps.length > 0,
+          s && isStudentProfileComplete(s, comps.length),
         );
         return {
           userId: u.id,

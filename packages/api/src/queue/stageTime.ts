@@ -3,6 +3,7 @@ import { user } from "@end-show/db/schema/auth";
 import { student, studentCompetency } from "@end-show/db/schema/student";
 import { eq, inArray } from "drizzle-orm";
 
+import { isStudentProfileComplete } from "../profileCompleteness";
 import { type AppearanceRecord, getAppearanceLog } from "./appearanceLog";
 
 /**
@@ -33,7 +34,7 @@ const COMPANION_HIDE_DECILE = 0.1;
  * profileComplete`. The `isPublished` flag is reserved for a future schema
  * column; today eligibility is proxied by profile completeness — every
  * required text field non-empty and at least one competency tag. This
- * predicate must stay aligned with `isComplete` in `routers/student.ts`.
+ * Uses the shared `isStudentProfileComplete` predicate.
  */
 async function eligibleStudentIds(): Promise<string[]> {
   const rows = await db
@@ -42,27 +43,22 @@ async function eligibleStudentIds(): Promise<string[]> {
       displayName: student.displayName,
       pronouns: student.pronouns,
       introduction: student.introduction,
-      link: student.link,
     })
     .from(student)
     .innerJoin(user, eq(user.id, student.userId))
     .where(eq(user.role, "student"));
-  const completeIds = rows
-    .filter(
-      (r) =>
-        r.displayName !== "" &&
-        r.pronouns !== "" &&
-        r.introduction !== "" &&
-        r.link !== "",
-    )
-    .map((r) => r.userId);
-  if (completeIds.length === 0) return [];
+  if (rows.length === 0) return [];
   const comps = await db
     .select({ studentUserId: studentCompetency.studentUserId })
     .from(studentCompetency)
-    .where(inArray(studentCompetency.studentUserId, completeIds));
-  const hasComp = new Set(comps.map((c) => c.studentUserId));
-  return completeIds.filter((id) => hasComp.has(id));
+    .where(inArray(studentCompetency.studentUserId, rows.map((r) => r.userId)));
+  const compCount = new Map<string, number>();
+  for (const c of comps) {
+    compCount.set(c.studentUserId, (compCount.get(c.studentUserId) ?? 0) + 1);
+  }
+  return rows
+    .filter((r) => isStudentProfileComplete(r, compCount.get(r.userId) ?? 0))
+    .map((r) => r.userId);
 }
 
 /** Aggregate raw Appearance rows into per-Student ms summed across overlaps

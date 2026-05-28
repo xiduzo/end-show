@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import { getAssetStore } from "../assetStore";
 import { protectedProcedure, publicProcedure, router } from "../index";
+import { isStudentProfileComplete } from "../profileCompleteness";
 import { rankForCompanion } from "../queue/stageTime";
 import {
   type StudentUpdate,
@@ -55,13 +56,7 @@ export type MyProfile = {
 };
 
 function isComplete(s: Omit<StudentSummary, "portraitUrl" | "workMediaUrl" | "workMediaKind">): boolean {
-  return Boolean(
-    s.displayName &&
-      s.pronouns &&
-      s.introduction &&
-      s.link &&
-      s.competencies.length > 0,
-  );
+  return isStudentProfileComplete(s, s.competencies.length);
 }
 
 const stageColorSchema = z.enum(["slime", "crayon", "bubblegum"]);

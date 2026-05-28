@@ -48,6 +48,7 @@ export function CompetenciesSection({
       label="Competencies"
       required
       hint={`${competencies.length} / ${COMP_MAX}`}
+      subtext="Pick from your cohort or add your own"
     >
       <div className="relative">
         <div

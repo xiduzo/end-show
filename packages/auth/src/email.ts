@@ -64,7 +64,10 @@ const FORCE_LIGHT_META = `<meta name="color-scheme" content="only light"><meta n
 
 async function renderMd(markdown: string) {
   const result = await render(markdown, { theme: THEME, fonts: FONTS });
-  const html = result.html.replace(/<head([^>]*)>/i, `<head$1>${FORCE_LIGHT_META}`);
+  const html = result.html.replace(
+    /<head([^>]*)>/i,
+    `<head$1>${FORCE_LIGHT_META}`,
+  );
   return { html, text: result.text };
 }
 
@@ -75,15 +78,15 @@ export async function sendStudentInviteEmail(args: {
   const host = getWebHost();
   const profileUrl = `${host}/profile`;
   const loginUrl = `${host}/login`;
-  const subject = "You are invited to the End Show!";
+  const subject = "You are invited to the Graduation Show!";
 
   const markdown = `---
-preheader: "Fill in your profile for the End Show"
+preheader: "Fill in your profile for the Graduation Show"
 ---
 
 # Hi ${args.name},
 
-You've been invited to the **End Show**.
+You've been invited to the **Graduation Show**.
 
 Sign in with your email at [${loginUrl}](${loginUrl}) and fill in your profile so we can show you off.
 
@@ -104,15 +107,15 @@ export async function sendStaffInviteEmail(args: { to: string; name: string }) {
   const host = getWebHost();
   const loginUrl = `${host}/login`;
   const adminUrl = `${host}/admin`;
-  const subject = "You have been added as End Show staff";
+  const subject = "You have been added as Graduation Show staff";
 
   const markdown = `---
-preheader: "You have admin access to the End Show"
+preheader: "You have admin access to the Graduation Show"
 ---
 
 # Hi ${args.name},
 
-You have been added as **staff** for the End Show.
+You have been added as **staff** for the Graduation Show.
 
 Sign in with your email at [${loginUrl}](${loginUrl}) to access the admin panel.
 

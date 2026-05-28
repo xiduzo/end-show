@@ -1,6 +1,6 @@
 # OTP-only authentication
 
-End Show is a one-shot live event where forgotten-password support on show day is an unacceptable failure mode. We use `better-auth` with **email OTP only** — no password credentials are issued, stored, or accepted — so neither Students nor Staff can lock themselves out in a way that requires a recovery flow we won't be staffing.
+Graduation Show is a one-shot live event where forgotten-password support on show day is an unacceptable failure mode. We use `better-auth` with **email OTP only** — no password credentials are issued, stored, or accepted — so neither Students nor Staff can lock themselves out in a way that requires a recovery flow we won't be staffing.
 
 ## Consequences
 

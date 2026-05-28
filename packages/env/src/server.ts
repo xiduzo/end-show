@@ -40,7 +40,10 @@ export const env = createEnv({
       .nonnegative()
       .default(5 * 1024 * 1024),
     RESEND_API_KEY: z.string().min(1).optional(),
-    RESEND_FROM: z.string().min(1).default("End Show <onboarding@resend.dev>"),
+    RESEND_FROM: z
+      .string()
+      .min(1)
+      .default("Graduation Show <onboarding@resend.dev>"),
     ROOT_STAFF_EMAIL: z.email().default("mail@sanderboer.nl"),
     ROOT_STAFF_NAME: z.string().trim().min(1).default("Sander Boer"),
   },

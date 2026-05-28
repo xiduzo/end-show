@@ -1,11 +1,11 @@
 # CONTEXT
 
-Glossary of domain terms for the End Show application — the digital graduation show for the [Master Digital Design](https://www.masterdigitaldesign.com/) programme.
+Glossary of domain terms for the Graduation Show application — the digital graduation show for the [Master Digital Design](https://www.masterdigitaldesign.com/) programme.
 
 ## Terms
 
 ### Student
-A graduating student showcased in the End Show. A Student is a **structured profile**, not a free-form artifact uploaded by the student.
+A graduating student showcased in the Graduation Show. A Student is a **structured profile**, not a free-form artifact uploaded by the student.
 
 Profile fields (required unless noted):
 - **Portrait** — a photo of the Student.

@@ -160,7 +160,7 @@ function AdminStaffRoute() {
         </div>
 
         <footer className="mt-16 flex items-center justify-between border-t border-dashed border-ink/20 pt-6 text-xs tracking-[0.2em] uppercase text-ink/50">
-          <span>End Show · MDD Graduation · {rows.length} Staff</span>
+          <span>Graduation Show · MDD · {rows.length} Staff</span>
         </footer>
       </div>
 

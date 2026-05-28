@@ -53,7 +53,7 @@ Line-height: `120%` everywhere.
 Tokens wired in `packages/ui/src/styles/globals.css` via `@theme`. Generates utilities automatically.
 
 ```tsx
-<h1 className="font-display text-title-1 text-lego-dark">End Show</h1>
+<h1 className="font-display text-title-1 text-lego-dark">Graduation Show</h1>
 <p className="font-mono text-body-1 text-ink">Body copy</p>
 <button className="bg-slide text-chalkboard">Action</button>
 <span className="bg-bubblegum text-bubblegum-dark">Badge</span>

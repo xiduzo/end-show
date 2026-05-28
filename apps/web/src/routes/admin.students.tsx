@@ -581,7 +581,7 @@ function AdminStudentsRoute() {
         </div>
 
         <footer className="mt-16 flex items-center justify-between border-t border-dashed border-ink/20 pt-6 text-xs tracking-[0.2em] uppercase text-ink/50">
-          <span>End Show · MDD Graduation · {counts.total} Students</span>
+          <span>Graduation Show · MDD · {counts.total} Students</span>
         </footer>
       </div>
 

@@ -128,6 +128,38 @@ Or open: [${adminUrl}](${adminUrl})
   await sendEmail({ to: args.to, subject, text, html });
 }
 
+export async function sendStudentFlaggedEmail(args: {
+  to: string;
+  name: string;
+  reason: string;
+}) {
+  const host = getWebHost();
+  const profileUrl = `${host}/profile`;
+  const subject = "Your Graduation Show profile has been flagged";
+
+  const markdown = `---
+preheader: "Your Graduation Show profile is currently hidden"
+---
+
+# Hi ${args.name},
+
+A staff member has **flagged** your Graduation Show profile, so it is no longer shown.
+
+::: highlight
+${args.reason}
+:::
+
+Please review your profile and address the issue above.
+
+[Open your profile](${profileUrl}){button}
+
+Or open: [${profileUrl}](${profileUrl})
+`;
+
+  const { html, text } = await renderMd(markdown);
+  await sendEmail({ to: args.to, subject, text, html });
+}
+
 type OtpType = "sign-in" | "email-verification" | "forget-password";
 
 const OTP_SUBJECTS: Record<OtpType, string> = {

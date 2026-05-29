@@ -1,4 +1,8 @@
-import { sendStaffInviteEmail, sendStudentInviteEmail } from "@end-show/auth/email";
+import {
+  sendStaffInviteEmail,
+  sendStudentFlaggedEmail,
+  sendStudentInviteEmail,
+} from "@end-show/auth/email";
 import { db } from "@end-show/db";
 import { asset, budgetLoan } from "@end-show/db/schema/asset";
 import { user } from "@end-show/db/schema/auth";
@@ -161,7 +165,7 @@ export const adminRouter = router({
         const updatedAt = s?.updatedAt ?? u.createdAt;
         const comps = compsByUser.get(u.id) ?? [];
         const isComplete = Boolean(
-          s && isStudentProfileComplete(s, comps.length),
+          s && isStudentProfileComplete({ ...s, workMediaUrl }, comps.length),
         );
         return {
           userId: u.id,
@@ -169,6 +173,8 @@ export const adminRouter = router({
           email: u.email,
           hasProfile: Boolean(s),
           isComplete,
+          isFlagged: Boolean(s?.isFlagged),
+          flaggedReason: s?.flaggedReason ?? "",
           displayName: s?.displayName ?? "",
           pronouns: s?.pronouns ?? "",
           link: s?.link ?? "",
@@ -218,6 +224,8 @@ export const adminRouter = router({
         userId: u.id,
         name: u.name,
         email: u.email,
+        isFlagged: Boolean(s?.isFlagged),
+        flaggedReason: s?.flaggedReason ?? "",
         displayName: s?.displayName ?? "",
         pronouns: s?.pronouns ?? "",
         introduction: s?.introduction ?? "",
@@ -384,6 +392,79 @@ export const adminRouter = router({
       await db.delete(user).where(inArray(user.id, studentIds));
       for (const id of studentIds) emitStudentUpdate(id);
       return { removed: studentIds.length };
+    }),
+
+  flagStudents: staffProcedure
+    .input(
+      z.object({
+        userIds: z.array(z.string().min(1)).min(1).max(200),
+        reason: z.string().trim().min(1).max(500),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const rows = await db
+        .select()
+        .from(user)
+        .where(inArray(user.id, input.userIds));
+      const students = rows.filter((u) => u.role === "student");
+      if (students.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "No students found" });
+      }
+      const studentIds = students.map((u) => u.id);
+      // Ensure a student profile row exists for everyone we flag.
+      const existing = await db
+        .select({ userId: student.userId })
+        .from(student)
+        .where(inArray(student.userId, studentIds));
+      const existingIds = new Set(existing.map((s) => s.userId));
+      const missing = studentIds.filter((id) => !existingIds.has(id));
+      if (missing.length > 0) {
+        await db.insert(student).values(
+          missing.map((userId) => ({
+            userId,
+            stageColor: defaultStageColor(userId),
+            isFlagged: true,
+            flaggedReason: input.reason,
+          })),
+        );
+      }
+      await db
+        .update(student)
+        .set({ isFlagged: true, flaggedReason: input.reason, updatedAt: new Date() })
+        .where(inArray(student.userId, studentIds));
+
+      for (const s of students) {
+        try {
+          await sendStudentFlaggedEmail({
+            to: s.email,
+            name: s.name,
+            reason: input.reason,
+          });
+        } catch (e) {
+          console.warn("[admin] flag email failed", e);
+        }
+      }
+      for (const id of studentIds) emitStudentUpdate(id);
+      return { flagged: studentIds.length };
+    }),
+
+  unflagStudents: staffProcedure
+    .input(z.object({ userIds: z.array(z.string().min(1)).min(1).max(200) }))
+    .mutation(async ({ input }) => {
+      const rows = await db
+        .select()
+        .from(user)
+        .where(inArray(user.id, input.userIds));
+      const studentIds = rows.filter((u) => u.role === "student").map((u) => u.id);
+      if (studentIds.length === 0) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "No students found" });
+      }
+      await db
+        .update(student)
+        .set({ isFlagged: false, flaggedReason: "", updatedAt: new Date() })
+        .where(inArray(student.userId, studentIds));
+      for (const id of studentIds) emitStudentUpdate(id);
+      return { unflagged: studentIds.length };
     }),
 
   upsertStudent: staffProcedure

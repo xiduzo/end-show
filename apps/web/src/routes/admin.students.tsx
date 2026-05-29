@@ -19,6 +19,8 @@ type StudentRow = {
   email: string;
   hasProfile: boolean;
   isComplete: boolean;
+  isFlagged: boolean;
+  flaggedReason: string;
   displayName: string;
   pronouns: string;
   link: string;
@@ -34,7 +36,7 @@ type StudentRow = {
   updatedAt: number;
 };
 
-type Filter = "all" | "complete" | "incomplete" | "over-budget";
+type Filter = "all" | "complete" | "incomplete" | "over-budget" | "flagged";
 
 type SortKey =
   | "name"
@@ -47,10 +49,11 @@ type SortKey =
   | "edited";
 
 const STATUS_RANK: Record<string, number> = {
-  "over budget": 0,
-  "no profile": 1,
-  incomplete: 2,
-  complete: 3,
+  flagged: 0,
+  "over budget": 1,
+  "no profile": 2,
+  incomplete: 3,
+  complete: 4,
 };
 
 const SHOWCASE_RANK: Record<string, number> = {
@@ -184,6 +187,31 @@ function AdminStudentsRoute() {
     }),
   );
 
+  const flagStudents = useMutation(
+    trpc.admin.flagStudents.mutationOptions({
+      onSuccess: async () => {
+        await qc.invalidateQueries({
+          queryKey: trpc.admin.listStudents.queryKey(),
+        });
+        await qc.invalidateQueries({
+          queryKey: trpc.student.listEligible.queryKey(),
+        });
+      },
+    }),
+  );
+  const unflagStudents = useMutation(
+    trpc.admin.unflagStudents.mutationOptions({
+      onSuccess: async () => {
+        await qc.invalidateQueries({
+          queryKey: trpc.admin.listStudents.queryKey(),
+        });
+        await qc.invalidateQueries({
+          queryKey: trpc.student.listEligible.queryKey(),
+        });
+      },
+    }),
+  );
+
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("edited");
@@ -194,6 +222,8 @@ function AdminStudentsRoute() {
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteTrack, setInviteTrack] = useState<"IxD" | "DFT">("IxD");
+  const [flagOpen, setFlagOpen] = useState(false);
+  const [flagReason, setFlagReason] = useState("");
 
   const rows: StudentRow[] = list.data ?? [];
 
@@ -202,13 +232,15 @@ function AdminStudentsRoute() {
     let complete = 0;
     let incomplete = 0;
     let overBudget = 0;
+    let flagged = 0;
     for (const r of rows) {
       total++;
       if (r.isComplete) complete++;
       else incomplete++;
       if (r.overBudget) overBudget++;
+      if (r.isFlagged) flagged++;
     }
-    return { total, complete, incomplete, overBudget };
+    return { total, complete, incomplete, overBudget, flagged };
   }, [rows]);
 
   const filtered = useMemo(() => {
@@ -217,6 +249,7 @@ function AdminStudentsRoute() {
       if (filter === "complete" && !r.isComplete) return false;
       if (filter === "incomplete" && r.isComplete) return false;
       if (filter === "over-budget" && !r.overBudget) return false;
+      if (filter === "flagged" && !r.isFlagged) return false;
       if (!q) return true;
       const hay = [r.displayName, r.name, r.email, r.link, ...r.competencies]
         .join(" ")
@@ -327,6 +360,46 @@ function AdminStudentsRoute() {
     }
   };
 
+  const closeFlag = () => {
+    setFlagOpen(false);
+    setFlagReason("");
+  };
+
+  const handleFlagSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const userIds = Array.from(selected);
+    const reason = flagReason.trim();
+    if (userIds.length === 0 || !reason) return;
+    try {
+      const res = await flagStudents.mutateAsync({ userIds, reason });
+      toast.success(
+        `Flagged ${res.flagged} student${res.flagged === 1 ? "" : "s"} · emailed`,
+      );
+      setSelected(new Set());
+      closeFlag();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not flag students",
+      );
+    }
+  };
+
+  const handleUnflagSelected = async () => {
+    const userIds = Array.from(selected);
+    if (userIds.length === 0) return;
+    try {
+      const res = await unflagStudents.mutateAsync({ userIds });
+      toast.success(
+        `Unflagged ${res.unflagged} student${res.unflagged === 1 ? "" : "s"}`,
+      );
+      setSelected(new Set());
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not unflag students",
+      );
+    }
+  };
+
   const handleRemoveSelected = async () => {
     const userIds = Array.from(selected);
     if (userIds.length === 0) return;
@@ -410,6 +483,16 @@ function AdminStudentsRoute() {
           >
             over budget
           </FilterPill>
+          <FilterPill
+            active={filter === "flagged"}
+            count={counts.flagged}
+            onClick={() => {
+              setFilter("flagged");
+              setPage(0);
+            }}
+          >
+            flagged
+          </FilterPill>
 
           <div className="ml-auto flex items-center gap-3">
             <div className="relative">
@@ -459,6 +542,22 @@ function AdminStudentsRoute() {
                 className="rounded-full border border-chalkboard/30 px-3 py-1 text-xs hover:bg-chalkboard/10"
               >
                 clear
+              </button>
+              <button
+                type="button"
+                onClick={() => setFlagOpen(true)}
+                disabled={flagStudents.isPending}
+                className="rounded-full border border-chalkboard/30 px-3 py-1 text-xs hover:bg-chalkboard/10 disabled:opacity-50"
+              >
+                flag {selected.size}
+              </button>
+              <button
+                type="button"
+                onClick={handleUnflagSelected}
+                disabled={unflagStudents.isPending}
+                className="rounded-full border border-chalkboard/30 px-3 py-1 text-xs hover:bg-chalkboard/10 disabled:opacity-50"
+              >
+                {unflagStudents.isPending ? "unflagging…" : "unflag"}
               </button>
               <button
                 type="button"
@@ -688,6 +787,62 @@ function AdminStudentsRoute() {
           </form>
         </div>
       )}
+
+      {flagOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
+          onClick={() => !flagStudents.isPending && closeFlag()}
+        >
+          <form
+            onSubmit={handleFlagSubmit}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-lg border border-ink/15 bg-white p-6 font-mono shadow-xl"
+          >
+            <h2 className="font-display text-2xl font-bold text-ink">
+              Flag {selected.size} student{selected.size === 1 ? "" : "s"}
+            </h2>
+            <p className="mt-1 text-xs text-ink/60">
+              Flagged students are hidden from the show. The reason below is
+              emailed to {selected.size === 1 ? "the student" : "each student"}.
+            </p>
+
+            <label className="mt-5 block text-xs tracking-[0.2em] uppercase text-ink/60">
+              Reason
+            </label>
+            <textarea
+              value={flagReason}
+              onChange={(e) => setFlagReason(e.target.value)}
+              autoFocus
+              required
+              maxLength={500}
+              rows={4}
+              placeholder="Why is this profile being flagged?"
+              className="mt-1 w-full rounded-md border border-ink/20 bg-white px-3 py-2 text-sm focus:border-ink/50 focus:outline-none"
+            />
+            <p className="mt-1 text-right text-xs text-ink/40">
+              {flagReason.trim().length}/500
+            </p>
+
+            <div className="mt-6 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeFlag}
+                disabled={flagStudents.isPending}
+                className="h-9 rounded-full border border-ink/20 px-4 text-sm hover:border-ink/40 disabled:opacity-50"
+              >
+                cancel
+              </button>
+              <button
+                type="submit"
+                disabled={flagStudents.isPending || !flagReason.trim()}
+                className="h-9 rounded-full bg-slide px-4 text-sm font-medium text-white hover:bg-slide/90 disabled:opacity-50"
+              >
+                {flagStudents.isPending ? "flagging…" : "flag & notify"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
@@ -784,7 +939,9 @@ function Row({
       ? 0
       : Math.min(100, (row.usedBytes / row.budgetBytes) * 100);
 
-  const status = !row.hasProfile
+  const status = row.isFlagged
+    ? { label: "flagged", className: "bg-bubblegum text-ink" }
+    : !row.hasProfile
     ? { label: "no profile", className: "border border-ink/20 text-ink/60" }
     : row.overBudget
       ? { label: "over budget", className: "bg-slide text-white" }
@@ -992,6 +1149,7 @@ function Row({
 
       <div>
         <span
+          title={row.isFlagged ? row.flaggedReason : undefined}
           className={cn(
             "inline-flex items-center rounded-full px-2 py-0.5 text-xs tracking-widest uppercase",
             status.className,

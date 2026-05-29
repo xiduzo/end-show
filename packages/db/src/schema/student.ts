@@ -15,6 +15,8 @@ export const student = sqliteTable("student", {
   track: text("track").notNull().default("IxD"),
   portraitAssetId: text("portrait_asset_id"),
   workMediaAssetId: text("work_media_asset_id"),
+  isFlagged: integer("is_flagged", { mode: "boolean" }).notNull().default(false),
+  flaggedReason: text("flagged_reason").notNull().default(""),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),

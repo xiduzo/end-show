@@ -2,6 +2,7 @@ type StudentProfileFields = {
   displayName: string | null | undefined;
   pronouns: string | null | undefined;
   introduction: string | null | undefined;
+  workMediaUrl: string | null | undefined;
 };
 
 export function isStudentProfileComplete(
@@ -12,6 +13,7 @@ export function isStudentProfileComplete(
     s.displayName &&
       s.pronouns &&
       s.introduction &&
+      s.workMediaUrl &&
       competenciesCount > 0,
   );
 }

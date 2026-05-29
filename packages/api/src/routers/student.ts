@@ -55,7 +55,7 @@ export type MyProfile = {
   workMediaKind: "work-image" | "work-video" | null;
 };
 
-function isComplete(s: Omit<StudentSummary, "portraitUrl" | "workMediaUrl" | "workMediaKind">): boolean {
+function isComplete(s: Omit<StudentSummary, "portraitUrl" | "workMediaKind">): boolean {
   return isStudentProfileComplete(s, s.competencies.length);
 }
 
@@ -100,7 +100,7 @@ export const studentRouter = router({
       .select({ s: student })
       .from(student)
       .innerJoin(user, eq(user.id, student.userId))
-      .where(eq(user.role, "student"));
+      .where(and(eq(user.role, "student"), eq(student.isFlagged, false)));
     const rows = joined.map((j) => j.s);
     const comps = await db.select().from(studentCompetency);
     const byStudent = new Map<string, string[]>();
@@ -150,7 +150,13 @@ export const studentRouter = router({
         .select({ s: student })
         .from(student)
         .innerJoin(user, eq(user.id, student.userId))
-        .where(and(eq(student.userId, input.userId), eq(user.role, "student")));
+        .where(
+          and(
+            eq(student.userId, input.userId),
+            eq(user.role, "student"),
+            eq(student.isFlagged, false),
+          ),
+        );
       const row = rows[0]?.s;
       if (!row) return null;
       const comps = await db

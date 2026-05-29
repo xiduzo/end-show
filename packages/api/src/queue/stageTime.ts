@@ -43,6 +43,7 @@ async function eligibleStudentIds(): Promise<string[]> {
       displayName: student.displayName,
       pronouns: student.pronouns,
       introduction: student.introduction,
+      workMediaAssetId: student.workMediaAssetId,
     })
     .from(student)
     .innerJoin(user, eq(user.id, student.userId))
@@ -57,7 +58,12 @@ async function eligibleStudentIds(): Promise<string[]> {
     compCount.set(c.studentUserId, (compCount.get(c.studentUserId) ?? 0) + 1);
   }
   return rows
-    .filter((r) => isStudentProfileComplete(r, compCount.get(r.userId) ?? 0))
+    .filter((r) =>
+      isStudentProfileComplete(
+        { ...r, workMediaUrl: r.workMediaAssetId },
+        compCount.get(r.userId) ?? 0,
+      ),
+    )
     .map((r) => r.userId);
 }
 

@@ -1,4 +1,6 @@
 import {
+  sendReviewAcceptedEmail,
+  sendReviewDeniedEmail,
   sendStaffInviteEmail,
   sendStudentFlaggedEmail,
   sendStudentInviteEmail,
@@ -175,6 +177,7 @@ export const adminRouter = router({
           isComplete,
           isFlagged: Boolean(s?.isFlagged),
           flaggedReason: s?.flaggedReason ?? "",
+          reviewRequest: (s?.reviewRequest as "none" | "pending" | "denied") ?? "none",
           displayName: s?.displayName ?? "",
           pronouns: s?.pronouns ?? "",
           link: s?.link ?? "",
@@ -226,6 +229,8 @@ export const adminRouter = router({
         email: u.email,
         isFlagged: Boolean(s?.isFlagged),
         flaggedReason: s?.flaggedReason ?? "",
+        reviewRequest: (s?.reviewRequest as "none" | "pending" | "denied") ?? "none",
+        reviewMessage: s?.reviewMessage ?? "",
         displayName: s?.displayName ?? "",
         pronouns: s?.pronouns ?? "",
         introduction: s?.introduction ?? "",
@@ -401,7 +406,8 @@ export const adminRouter = router({
         reason: z.string().trim().min(1).max(500),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
+      const callerId = (ctx.session.user as { id: string }).id;
       const rows = await db
         .select()
         .from(user)
@@ -425,12 +431,22 @@ export const adminRouter = router({
             stageColor: defaultStageColor(userId),
             isFlagged: true,
             flaggedReason: input.reason,
+            flaggedBy: callerId,
           })),
         );
       }
+      // Re-flagging clears any prior re-review request so the student gets a
+      // fresh shot to ask the (possibly new) flagger for a re-review.
       await db
         .update(student)
-        .set({ isFlagged: true, flaggedReason: input.reason, updatedAt: new Date() })
+        .set({
+          isFlagged: true,
+          flaggedReason: input.reason,
+          flaggedBy: callerId,
+          reviewRequest: "none",
+          reviewMessage: "",
+          updatedAt: new Date(),
+        })
         .where(inArray(student.userId, studentIds));
 
       for (const s of students) {
@@ -461,10 +477,81 @@ export const adminRouter = router({
       }
       await db
         .update(student)
-        .set({ isFlagged: false, flaggedReason: "", updatedAt: new Date() })
+        .set({
+          isFlagged: false,
+          flaggedReason: "",
+          flaggedBy: null,
+          reviewRequest: "none",
+          reviewMessage: "",
+          updatedAt: new Date(),
+        })
         .where(inArray(student.userId, studentIds));
       for (const id of studentIds) emitStudentUpdate(id);
       return { unflagged: studentIds.length };
+    }),
+
+  resolveReview: staffProcedure
+    .input(
+      z.object({
+        userId: z.string().min(1),
+        decision: z.enum(["accept", "deny"]),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const userRows = await db.select().from(user).where(eq(user.id, input.userId));
+      const u = userRows[0];
+      if (!u || u.role !== "student") {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Student not found" });
+      }
+      const studentRows = await db
+        .select()
+        .from(student)
+        .where(eq(student.userId, input.userId));
+      const s = studentRows[0];
+      if (!s || s.reviewRequest !== "pending") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "No pending re-review request for this student",
+        });
+      }
+
+      if (input.decision === "accept") {
+        // Accepting restores the profile — same end state as an unflag.
+        await db
+          .update(student)
+          .set({
+            isFlagged: false,
+            flaggedReason: "",
+            flaggedBy: null,
+            reviewRequest: "none",
+            reviewMessage: "",
+            updatedAt: new Date(),
+          })
+          .where(eq(student.userId, input.userId));
+        try {
+          await sendReviewAcceptedEmail({ to: u.email, name: u.name });
+        } catch (e) {
+          console.warn("[admin] review accepted email failed", e);
+        }
+      } else {
+        // Denying spends the student's one-time request: they stay flagged and
+        // cannot ask again.
+        await db
+          .update(student)
+          .set({ reviewRequest: "denied", updatedAt: new Date() })
+          .where(eq(student.userId, input.userId));
+        try {
+          await sendReviewDeniedEmail({
+            to: u.email,
+            name: u.name,
+            reason: s.flaggedReason,
+          });
+        } catch (e) {
+          console.warn("[admin] review denied email failed", e);
+        }
+      }
+      emitStudentUpdate(input.userId);
+      return { decision: input.decision };
     }),
 
   upsertStudent: staffProcedure

@@ -17,6 +17,12 @@ export const student = sqliteTable("student", {
   workMediaAssetId: text("work_media_asset_id"),
   isFlagged: integer("is_flagged", { mode: "boolean" }).notNull().default(false),
   flaggedReason: text("flagged_reason").notNull().default(""),
+  flaggedBy: text("flagged_by").references(() => user.id, { onDelete: "set null" }),
+  // Re-review request lifecycle for a flagged student: "none" (no request),
+  // "pending" (student asked for re-review), "denied" (request rejected — the
+  // student's one shot is spent and they cannot ask again).
+  reviewRequest: text("review_request").notNull().default("none"),
+  reviewMessage: text("review_message").notNull().default(""),
   createdAt: integer("created_at", { mode: "timestamp_ms" })
     .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
     .notNull(),

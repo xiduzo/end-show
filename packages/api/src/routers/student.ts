@@ -1,7 +1,10 @@
+import { sendReviewRequestEmail } from "@end-show/auth/email";
 import { db } from "@end-show/db";
 import { asset } from "@end-show/db/schema/asset";
 import { user } from "@end-show/db/schema/auth";
 import { student, studentCompetency } from "@end-show/db/schema/student";
+import { env } from "@end-show/env/server";
+import { TRPCError } from "@trpc/server";
 import { observable } from "@trpc/server/observable";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
@@ -53,6 +56,9 @@ export type MyProfile = {
   portraitUrl: string | null;
   workMediaUrl: string | null;
   workMediaKind: "work-image" | "work-video" | null;
+  isFlagged: boolean;
+  flaggedReason: string;
+  reviewRequest: "none" | "pending" | "denied";
 };
 
 function isComplete(s: Omit<StudentSummary, "portraitUrl" | "workMediaKind">): boolean {
@@ -235,8 +241,69 @@ export const studentRouter = router({
         workRow?.kind === "work-image" || workRow?.kind === "work-video"
           ? workRow.kind
           : null,
+      isFlagged: Boolean(row.isFlagged),
+      flaggedReason: row.flaggedReason,
+      reviewRequest: (row.reviewRequest as "none" | "pending" | "denied") ?? "none",
     };
   }),
+
+  requestReview: protectedProcedure
+    .input(z.object({ message: z.string().trim().max(500) }))
+    .mutation(async ({ ctx, input }): Promise<{ ok: true }> => {
+      const userId = ctx.session.user.id;
+      const rows = await db.select().from(student).where(eq(student.userId, userId));
+      const row = rows[0];
+      if (!row || !row.isFlagged) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Your profile is not flagged",
+        });
+      }
+      if (row.reviewRequest === "pending") {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "You already have a re-review request pending",
+        });
+      }
+      if (row.reviewRequest === "denied") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Your re-review request was already declined",
+        });
+      }
+      await db
+        .update(student)
+        .set({ reviewRequest: "pending", reviewMessage: input.message, updatedAt: new Date() })
+        .where(eq(student.userId, userId));
+
+      // Notify the staff member who flagged them; fall back to root staff for
+      // legacy flags with no recorded flagger.
+      const me = ctx.session.user as { name: string; email: string };
+      let to = env.ROOT_STAFF_EMAIL;
+      let staffName = "there";
+      if (row.flaggedBy) {
+        const staffRows = await db.select().from(user).where(eq(user.id, row.flaggedBy));
+        const staff = staffRows[0];
+        if (staff) {
+          to = staff.email;
+          staffName = staff.name;
+        }
+      }
+      try {
+        await sendReviewRequestEmail({
+          to,
+          staffName,
+          studentName: me.name,
+          studentUserId: userId,
+          reason: row.flaggedReason,
+          message: input.message,
+        });
+      } catch (e) {
+        console.warn("[student] review request email failed", e);
+      }
+      emitStudentUpdate(userId);
+      return { ok: true };
+    }),
 
   upsertProfile: protectedProcedure
     .input(profileInput)

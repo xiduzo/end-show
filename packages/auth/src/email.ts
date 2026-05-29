@@ -160,6 +160,108 @@ Or open: [${profileUrl}](${profileUrl})
   await sendEmail({ to: args.to, subject, text, html });
 }
 
+export async function sendReviewRequestEmail(args: {
+  to: string;
+  staffName: string;
+  studentName: string;
+  studentUserId: string;
+  reason: string;
+  message: string;
+}) {
+  const host = getWebHost();
+  const reviewUrl = `${host}/admin/students/${args.studentUserId}`;
+  const subject = `${args.studentName} requested a re-review of their flagged profile`;
+
+  const note = args.message
+    ? `They added a note:
+
+::: highlight
+${args.message}
+:::
+`
+    : "They did not add a note.";
+
+  const markdown = `---
+preheader: "A flagged student wants their profile re-reviewed"
+---
+
+# Hi ${args.staffName},
+
+**${args.studentName}** has fixed their profile and is asking you to re-review it.
+
+You flagged them for:
+
+::: highlight
+${args.reason}
+:::
+
+${note}
+
+Open their profile to **accept** (restore & show) or **deny** (keep hidden) the request. Either way they will be emailed.
+
+[Review ${args.studentName}](${reviewUrl}){button}
+
+Or open: [${reviewUrl}](${reviewUrl})
+`;
+
+  const { html, text } = await renderMd(markdown);
+  await sendEmail({ to: args.to, subject, text, html });
+}
+
+export async function sendReviewAcceptedEmail(args: { to: string; name: string }) {
+  const host = getWebHost();
+  const profileUrl = `${host}/profile`;
+  const subject = "Your Graduation Show profile is back online";
+
+  const markdown = `---
+preheader: "Your re-review request was accepted"
+---
+
+# Hi ${args.name},
+
+Good news — a staff member **accepted** your re-review request. Your profile is no longer flagged and is shown again in the Graduation Show.
+
+[Open your profile](${profileUrl}){button}
+
+Or open: [${profileUrl}](${profileUrl})
+`;
+
+  const { html, text } = await renderMd(markdown);
+  await sendEmail({ to: args.to, subject, text, html });
+}
+
+export async function sendReviewDeniedEmail(args: {
+  to: string;
+  name: string;
+  reason: string;
+}) {
+  const host = getWebHost();
+  const profileUrl = `${host}/profile`;
+  const subject = "Your re-review request was not accepted";
+
+  const markdown = `---
+preheader: "Your profile is still flagged"
+---
+
+# Hi ${args.name},
+
+A staff member reviewed your request and **kept your profile flagged**, so it stays hidden.
+
+::: highlight
+${args.reason}
+:::
+
+Please reach out to a staff member directly if you need more detail.
+
+[Open your profile](${profileUrl}){button}
+
+Or open: [${profileUrl}](${profileUrl})
+`;
+
+  const { html, text } = await renderMd(markdown);
+  await sendEmail({ to: args.to, subject, text, html });
+}
+
 type OtpType = "sign-in" | "email-verification" | "forget-password";
 
 const OTP_SUBJECTS: Record<OtpType, string> = {

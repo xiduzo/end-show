@@ -81,6 +81,8 @@ function AdminStudentEdit() {
         name={data.data.displayName || data.data.name}
         isFlagged={data.data.isFlagged}
         flaggedReason={data.data.flaggedReason}
+        reviewRequest={data.data.reviewRequest}
+        reviewMessage={data.data.reviewMessage}
       />
     </>
   );
@@ -91,11 +93,15 @@ function FlagFab({
   name,
   isFlagged,
   flaggedReason,
+  reviewRequest,
+  reviewMessage,
 }: {
   userId: string;
   name: string;
   isFlagged: boolean;
   flaggedReason: string;
+  reviewRequest: "none" | "pending" | "denied";
+  reviewMessage: string;
 }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -136,6 +142,21 @@ function FlagFab({
         toast.error(err instanceof Error ? err.message : "Could not unflag"),
     }),
   );
+  const resolve = useMutation(
+    trpc.admin.resolveReview.mutationOptions({
+      onSuccess: async (res) => {
+        toast.success(
+          res.decision === "accept"
+            ? `${name} restored · emailed`
+            : `Request declined · ${name} emailed`,
+        );
+        if (res.decision === "accept") setOpen(false);
+        await invalidate();
+      },
+      onError: (err) =>
+        toast.error(err instanceof Error ? err.message : "Could not resolve"),
+    }),
+  );
 
   return (
     <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-3 font-mono">
@@ -154,6 +175,47 @@ function FlagFab({
                   Reason sent to {name}
                 </p>
                 <p className="mt-1 text-sm text-ink/85">{flaggedReason || "—"}</p>
+
+                {reviewRequest === "pending" && (
+                  <div className="mt-4 rounded-lg border border-slime/50 bg-slime/15 px-3 py-3">
+                    <p className="text-[0.65rem] tracking-[0.2em] uppercase text-ink/55">
+                      Re-review requested
+                    </p>
+                    {reviewMessage ? (
+                      <p className="mt-1 text-sm text-ink/85">{reviewMessage}</p>
+                    ) : (
+                      <p className="mt-1 text-sm text-ink/50">No note added.</p>
+                    )}
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          resolve.mutate({ userId, decision: "accept" })
+                        }
+                        disabled={resolve.isPending}
+                        className="h-9 flex-1 rounded-full bg-slime text-sm font-medium text-ink transition hover:bg-slime/90 disabled:opacity-40"
+                      >
+                        accept & restore
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          resolve.mutate({ userId, decision: "deny" })
+                        }
+                        disabled={resolve.isPending}
+                        className="h-9 flex-1 rounded-full border border-ink/30 bg-white text-sm font-medium text-ink transition hover:border-ink/60 disabled:opacity-40"
+                      >
+                        deny
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {reviewRequest === "denied" && (
+                  <p className="mt-4 rounded-lg bg-ink/5 px-3 py-2.5 text-[0.7rem] text-ink/55">
+                    Re-review request was declined — the student cannot ask again.
+                  </p>
+                )}
+
                 <button
                   type="button"
                   onClick={() => unflag.mutate({ userIds: [userId] })}
@@ -214,15 +276,27 @@ function FlagFab({
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-label={isFlagged ? "Flagged student" : "Flag student"}
-        title={isFlagged ? "Flagged — hidden from the show" : "Flag student"}
+        title={
+          reviewRequest === "pending"
+            ? "Re-review requested"
+            : isFlagged
+              ? "Flagged — hidden from the show"
+              : "Flag student"
+        }
         className={
-          "flex h-14 w-14 items-center justify-center rounded-full text-2xl shadow-xl transition hover:scale-105 active:scale-95 " +
+          "relative flex h-14 w-14 items-center justify-center rounded-full text-2xl shadow-xl transition hover:scale-105 active:scale-95 " +
           (isFlagged
             ? "bg-bubblegum text-ink"
             : "bg-ink text-chalkboard hover:bg-ink/90")
         }
       >
         {open ? "✕" : "⚑"}
+        {!open && reviewRequest === "pending" && (
+          <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-slime opacity-75" />
+            <span className="relative inline-flex h-3.5 w-3.5 rounded-full bg-slime ring-2 ring-white" />
+          </span>
+        )}
       </button>
     </div>
   );

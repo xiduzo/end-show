@@ -168,7 +168,7 @@ export function CardEditor({
   const complete = (k: TabKey): boolean => {
     switch (k) {
       case "identity":
-        return !!draft.displayName.trim() && !!draft.pronouns.trim();
+        return !!draft.displayName.trim();
       case "portrait":
         return !!profile.portraitUrl;
       case "story":
@@ -367,7 +367,7 @@ export function CardEditor({
                       className={inputCls}
                     />
                   </Field>
-                  <Field label="Pronouns" required>
+                  <Field label="Pronouns">
                     <input
                       value={draft.pronouns}
                       onChange={(e) =>

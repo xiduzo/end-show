@@ -11,7 +11,6 @@ export function isStudentProfileComplete(
 ): boolean {
   return Boolean(
     s.displayName &&
-      s.pronouns &&
       s.introduction &&
       s.workMediaUrl &&
       competenciesCount > 0,

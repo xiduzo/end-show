@@ -97,7 +97,7 @@ const profileInput = z.object({
   introduction: z.string().trim().max(80),
   link: draftLink,
   stageColor: stageColorSchema.nullable(),
-  competencies: z.array(z.string().trim().min(1).max(18)).max(5),
+  competencies: z.array(z.string().trim().min(1).max(28)).max(5),
 });
 
 export const studentRouter = router({

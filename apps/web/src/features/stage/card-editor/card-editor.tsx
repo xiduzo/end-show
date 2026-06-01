@@ -399,7 +399,7 @@ export function CardEditor({
                       </div>
                     </Field>
                   )}
-                  <Field label="Portfolio link" hint="Optional">
+                  <Field label="Portfolio link">
                     <input
                       value={draft.link}
                       onChange={(e) => update("link", e.target.value)}

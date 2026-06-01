@@ -2,6 +2,7 @@ import { sendReviewRequestEmail } from "@end-show/auth/email";
 import { db } from "@end-show/db";
 import { asset } from "@end-show/db/schema/asset";
 import { user } from "@end-show/db/schema/auth";
+import { titleCaseTag } from "@end-show/db/competency";
 import { student, studentCompetency } from "@end-show/db/schema/student";
 import { env } from "@end-show/env/server";
 import { TRPCError } from "@trpc/server";
@@ -90,14 +91,6 @@ export const draftLink = z
   .refine((v) => v === "" || z.string().url().safeParse(v).success, {
     message: "Invalid URL",
   });
-
-/** Title-cases each word in a competency tag: "game design" -> "Game Design". */
-export function titleCaseTag(tag: string): string {
-  return tag.replace(
-    /[^\s/-]+/g,
-    (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
-  );
-}
 
 export const competencyTag = z.string().trim().min(1).max(28).transform(titleCaseTag);
 

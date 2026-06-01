@@ -30,12 +30,42 @@ export const ONE_LINER_MAX = 80;
 export const COMP_MAX = 5;
 export const COMP_TAG_MAX = 28;
 
-/** Title-cases each word in a competency tag: "game design" -> "Game Design". */
+/**
+ * Canonical acronym spellings for digital/interaction design. Keep in sync
+ * with packages/db/src/competency.ts — duplicated here so the client bundle
+ * does not import the server-only db package. The server normalizes on save;
+ * this only makes editor chips look right immediately as you type.
+ */
+const DESIGN_ACRONYMS: readonly string[] = [
+  "UX", "UI", "UXD", "UID", "UXR", "HCI", "IxD", "CX", "EX", "SX", "DX",
+  "IA", "CI", "QA", "QC", "UAT", "CRO", "CTA", "DDD", "DesignOps", "DevRel",
+  "AR", "VR", "XR", "MR", "3D", "2D", "CGI", "VFX", "CAD", "FUI", "GUI", "TUI", "NUI",
+  "AI", "ML", "LLM", "NLP", "GenAI", "OCR", "TTS", "STT", "RAG",
+  "HTML", "CSS", "JS", "TS", "JSX", "TSX", "API", "SDK", "CLI", "DOM", "CMS",
+  "PWA", "SPA", "SSR", "SSG", "REST", "GraphQL", "SQL", "JSON", "YAML", "XML",
+  "HTTP", "HTTPS", "URL", "URI", "CDN", "DNS", "OS", "IoT", "NFC", "GPS", "QR",
+  "WASM", "RWD",
+  "GIF", "JPG", "JPEG", "PNG", "SVG", "WebP", "PDF", "EPS", "PSD", "RAW",
+  "MP3", "MP4", "MOV", "WAV", "RGB", "RGBA", "CMYK", "HSL", "HSB", "HEX",
+  "DPI", "PPI", "FPS", "HD", "UHD", "4K", "8K", "HDR", "SDR", "GLB", "glTF",
+  "WCAG", "ADA", "ARIA", "A11Y", "i18n", "l10n", "ISO", "RFC", "GDPR",
+  "LED", "LCD", "OLED", "USB", "RFID", "CNC",
+  "MVP", "PoC", "RFP", "SOW", "NDA", "SLA", "OKR", "KPI", "ROI", "ROAS",
+  "CRM", "ERP", "SEO", "SEM", "SaaS", "B2B", "B2C", "D2C", "B2B2C", "P2P", "GTM",
+];
+
+const ACRONYM_BY_UPPER = new Map(DESIGN_ACRONYMS.map((a) => [a.toUpperCase(), a]));
+
+/**
+ * Title-cases each word in a competency tag while preserving known acronyms:
+ * "game design" -> "Game Design", "ux designer" -> "UX Designer".
+ */
 export function titleCaseTag(tag: string): string {
-  return tag.replace(
-    /[^\s/-]+/g,
-    (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
-  );
+  return tag.replace(/[^\s/-]+/g, (word) => {
+    const canonical = ACRONYM_BY_UPPER.get(word.toUpperCase());
+    if (canonical) return canonical;
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
 }
 
 export const inputCls =

@@ -91,13 +91,23 @@ export const draftLink = z
     message: "Invalid URL",
   });
 
+/** Title-cases each word in a competency tag: "game design" -> "Game Design". */
+export function titleCaseTag(tag: string): string {
+  return tag.replace(
+    /[^\s/-]+/g,
+    (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
+  );
+}
+
+export const competencyTag = z.string().trim().min(1).max(28).transform(titleCaseTag);
+
 const profileInput = z.object({
   displayName: z.string().trim().max(80),
   pronouns: z.string().trim().max(40),
   introduction: z.string().trim().max(80),
   link: draftLink,
   stageColor: stageColorSchema.nullable(),
-  competencies: z.array(z.string().trim().min(1).max(28)).max(5),
+  competencies: z.array(competencyTag).max(5),
 });
 
 export const studentRouter = router({

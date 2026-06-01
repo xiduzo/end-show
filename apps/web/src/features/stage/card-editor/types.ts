@@ -30,6 +30,14 @@ export const ONE_LINER_MAX = 80;
 export const COMP_MAX = 5;
 export const COMP_TAG_MAX = 28;
 
+/** Title-cases each word in a competency tag: "game design" -> "Game Design". */
+export function titleCaseTag(tag: string): string {
+  return tag.replace(
+    /[^\s/-]+/g,
+    (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
+  );
+}
+
 export const inputCls =
   "w-full rounded-md border border-lego-dark/20 bg-white px-3 py-2 font-mono text-sm text-lego-dark placeholder:text-lego-dark/30 focus:border-lego focus:outline-none";
 

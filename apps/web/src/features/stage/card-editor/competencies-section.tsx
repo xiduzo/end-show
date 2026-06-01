@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 
 import { Field } from "./field";
 import { Highlight } from "./highlight";
-import { COMP_MAX, COMP_TAG_MAX } from "./types";
+import { COMP_MAX, COMP_TAG_MAX, titleCaseTag } from "./types";
 
 export function CompetenciesSection({
   competencies,
@@ -29,7 +29,7 @@ export function CompetenciesSection({
   );
 
   const add = (tag: string) => {
-    const t = tag.trim();
+    const t = titleCaseTag(tag.trim());
     if (!t || competencies.includes(t) || competencies.length >= COMP_MAX)
       return;
     onChange([...competencies, t]);

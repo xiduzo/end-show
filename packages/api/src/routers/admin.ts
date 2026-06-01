@@ -22,7 +22,7 @@ import { getAssetStore } from "../assetStore";
 import { router, staffProcedure } from "../index";
 import { isStudentProfileComplete } from "../profileCompleteness";
 import { emitStudentUpdate } from "../studentEvents";
-import { defaultStageColor, draftLink, trackSchema, type StageColor, type Track } from "./student";
+import { competencyTag, defaultStageColor, draftLink, trackSchema, type StageColor, type Track } from "./student";
 
 const stageColorSchema = z.enum(["slime", "crayon", "bubblegum"]);
 
@@ -31,7 +31,7 @@ const profileInput = z.object({
   pronouns: z.string().trim().max(40),
   introduction: z.string().trim().max(80),
   link: draftLink,
-  competencies: z.array(z.string().trim().min(1).max(28)).max(5),
+  competencies: z.array(competencyTag).max(5),
   stageColor: stageColorSchema.nullable(),
   track: trackSchema,
 });

@@ -448,6 +448,7 @@ export function CardEditor({
                 <ShowcaseColumn
                   workMediaUrl={profile.workMediaUrl}
                   workMediaKind={profile.workMediaKind}
+                  dwellMs={stageConfig.data?.dwellMs ?? null}
                   busy={
                     upload.busy &&
                     (upload.activeKind === "work-image" ||

@@ -1,6 +1,11 @@
+import { useState } from "react";
+
+const STAGE_TOLERANCE_MS = 1000;
+
 export function ShowcaseColumn({
   workMediaUrl,
   workMediaKind,
+  dwellMs,
   busy,
   progress,
   onPick,
@@ -9,12 +14,28 @@ export function ShowcaseColumn({
 }: {
   workMediaUrl: string | null;
   workMediaKind: "work-image" | "work-video" | null;
+  dwellMs: number | null;
   busy: boolean;
   progress: number;
   onPick: () => void;
   onPickVideo: () => void;
   readOnly?: boolean;
 }) {
+  const [videoDurationMs, setVideoDurationMs] = useState<number | null>(null);
+
+  const stageMismatch =
+    workMediaKind === "work-video" &&
+    dwellMs !== null &&
+    videoDurationMs !== null &&
+    Math.abs(videoDurationMs - dwellMs) > STAGE_TOLERANCE_MS
+      ? videoDurationMs > dwellMs
+        ? "over"
+        : "under"
+      : null;
+  const stageSec = dwellMs !== null ? Math.round(dwellMs / 1000) : null;
+  const videoSec =
+    videoDurationMs !== null ? Math.round(videoDurationMs / 100) / 10 : null;
+
   return (
     <div>
       <div className="mb-1.5 flex items-baseline justify-between">
@@ -49,6 +70,12 @@ export function ShowcaseColumn({
               playsInline
               preload="auto"
               crossOrigin="anonymous"
+              onLoadedMetadata={(e) => {
+                const d = e.currentTarget.duration;
+                setVideoDurationMs(
+                  Number.isFinite(d) && d > 0 ? d * 1000 : null,
+                );
+              }}
               className="h-full w-full object-cover"
             >
               <source src={workMediaUrl} type="video/mp4" />
@@ -89,6 +116,13 @@ export function ShowcaseColumn({
           </button>
         )}
       </div>
+      {stageMismatch && (
+        <p className="mt-2 font-mono text-xs text-lego-dark/40">
+          {stageMismatch === "over"
+            ? `your video is ${videoSec}s — only the first ${stageSec}s play on stage`
+            : `your video is ${videoSec}s — it loops until the ${stageSec}s stage slot ends`}
+        </p>
+      )}
     </div>
   );
 }

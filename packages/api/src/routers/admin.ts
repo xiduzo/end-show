@@ -368,6 +368,78 @@ export const adminRouter = router({
       return { userId };
     }),
 
+  createStudents: staffProcedure
+    .input(
+      z.object({
+        rows: z
+          .array(
+            z.object({
+              name: z.string().trim().min(1).max(80),
+              email: z.string().trim().toLowerCase().email().max(200),
+              track: trackSchema.default("IxD"),
+            }),
+          )
+          .min(1)
+          .max(200),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const emails = input.rows.map((r) => r.email);
+      const existing = await db
+        .select({ email: user.email })
+        .from(user)
+        .where(inArray(user.email, emails));
+      const taken = new Set(existing.map((u) => u.email.toLowerCase()));
+      const seen = new Set<string>();
+      const results: {
+        name: string;
+        email: string;
+        status: "created" | "exists" | "duplicate" | "failed";
+        message?: string;
+      }[] = [];
+      for (const row of input.rows) {
+        if (taken.has(row.email)) {
+          results.push({ ...row, status: "exists" });
+          continue;
+        }
+        if (seen.has(row.email)) {
+          results.push({ ...row, status: "duplicate" });
+          continue;
+        }
+        seen.add(row.email);
+        try {
+          const userId = crypto.randomUUID();
+          await db.insert(user).values({
+            id: userId,
+            name: row.name,
+            email: row.email,
+            emailVerified: true,
+            role: "student",
+          });
+          await db
+            .insert(student)
+            .values({ userId, stageColor: defaultStageColor(userId), track: row.track });
+          emitStudentUpdate(userId);
+          try {
+            await sendStudentInviteEmail({ to: row.email, name: row.name });
+          } catch (e) {
+            console.warn("[admin] invite email failed", e);
+          }
+          results.push({ ...row, status: "created" });
+        } catch (e) {
+          results.push({
+            ...row,
+            status: "failed",
+            message: e instanceof Error ? e.message : "unknown error",
+          });
+        }
+      }
+      return {
+        results,
+        created: results.filter((r) => r.status === "created").length,
+      };
+    }),
+
   removeStudents: staffProcedure
     .input(z.object({ userIds: z.array(z.string().min(1)).min(1).max(200) }))
     .mutation(async ({ ctx, input }) => {

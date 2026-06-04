@@ -38,6 +38,20 @@ type StudentRow = {
 
 type Filter = "all" | "complete" | "incomplete" | "over-budget" | "flagged";
 
+type BulkRow = {
+  name: string;
+  email: string;
+  track: "IxD" | "DFT";
+  error?: string;
+};
+
+type BulkResult = {
+  name: string;
+  email: string;
+  status: "created" | "exists" | "duplicate" | "failed";
+  message?: string;
+};
+
 type SortKey =
   | "name"
   | "track"
@@ -162,11 +176,54 @@ function toCsv(rows: StudentRow[]): string {
   return [header.join(","), ...lines].join("\n");
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function parseBulkRows(grid: string[][]): BulkRow[] {
+  const rows = grid.filter((r) => r.some((c) => c !== ""));
+  const first = rows[0];
+  if (!first) return [];
+  let nameIdx = 0;
+  let emailIdx = 1;
+  let trackIdx = 2;
+  let start = 0;
+  const header = first.map((c) => c.toLowerCase());
+  const hEmail = header.findIndex((c) => c.includes("mail"));
+  if (hEmail >= 0) {
+    // header row present — map columns by name
+    emailIdx = hEmail;
+    const hName = header.findIndex((c) => c.includes("name") || c === "naam");
+    nameIdx = hName >= 0 ? hName : hEmail === 0 ? 1 : 0;
+    trackIdx = header.findIndex((c) => c.includes("track"));
+    start = 1;
+  }
+  return rows.slice(start).map((r) => {
+    const name = (r[nameIdx] ?? "").trim();
+    const email = (r[emailIdx] ?? "").trim().toLowerCase();
+    const rawTrack =
+      trackIdx >= 0 ? (r[trackIdx] ?? "").trim().toUpperCase() : "";
+    const track: "IxD" | "DFT" = rawTrack === "DFT" ? "DFT" : "IxD";
+    let error: string | undefined;
+    if (!name) error = "missing name";
+    else if (name.length > 80) error = "name too long";
+    else if (!EMAIL_RE.test(email)) error = "invalid email";
+    return { name, email, track, error };
+  });
+}
+
 function AdminStudentsRoute() {
   const qc = useQueryClient();
   const list = useQuery(trpc.admin.listStudents.queryOptions());
   const createStudent = useMutation(
     trpc.admin.createStudent.mutationOptions({
+      onSuccess: async () => {
+        await qc.invalidateQueries({
+          queryKey: trpc.admin.listStudents.queryKey(),
+        });
+      },
+    }),
+  );
+  const createStudents = useMutation(
+    trpc.admin.createStudents.mutationOptions({
       onSuccess: async () => {
         await qc.invalidateQueries({
           queryKey: trpc.admin.listStudents.queryKey(),
@@ -222,6 +279,9 @@ function AdminStudentsRoute() {
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteTrack, setInviteTrack] = useState<"IxD" | "DFT">("IxD");
+  const [bulkRows, setBulkRows] = useState<BulkRow[] | null>(null);
+  const [bulkResults, setBulkResults] = useState<BulkResult[] | null>(null);
+  const bulkFileRef = useRef<HTMLInputElement>(null);
   const [flagOpen, setFlagOpen] = useState(false);
   const [flagReason, setFlagReason] = useState("");
 
@@ -344,6 +404,57 @@ function AdminStudentsRoute() {
     setInviteName("");
     setInviteEmail("");
     setInviteTrack("IxD");
+    setBulkRows(null);
+    setBulkResults(null);
+  };
+
+  const handleBulkFile = async (file: File) => {
+    try {
+      const XLSX = await import("xlsx");
+      const wb = XLSX.read(await file.arrayBuffer());
+      const ws = wb.Sheets[wb.SheetNames[0] ?? ""];
+      if (!ws) throw new Error("No sheet found in file");
+      const grid = XLSX.utils.sheet_to_json<(string | number)[]>(ws, {
+        header: 1,
+        raw: false,
+        defval: "",
+      });
+      const parsed = parseBulkRows(
+        grid.map((r) => r.map((c) => String(c ?? "").trim())),
+      );
+      if (parsed.length === 0) {
+        toast.error("No rows found in file");
+        return;
+      }
+      if (parsed.length > 200) {
+        toast.error("Max 200 rows per upload");
+        return;
+      }
+      setBulkRows(parsed);
+      setBulkResults(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not read file");
+    } finally {
+      if (bulkFileRef.current) bulkFileRef.current.value = "";
+    }
+  };
+
+  const handleBulkSubmit = async () => {
+    const valid = (bulkRows ?? []).filter((r) => !r.error);
+    if (valid.length === 0) return;
+    try {
+      const res = await createStudents.mutateAsync({
+        rows: valid.map(({ name, email, track }) => ({ name, email, track })),
+      });
+      setBulkResults(res.results);
+      toast.success(
+        `${res.created} student${res.created === 1 ? "" : "s"} invited`,
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not invite students",
+      );
+    }
   };
 
   const handleInviteSubmit = async (e: React.FormEvent) => {
@@ -703,87 +814,242 @@ function AdminStudentsRoute() {
       {inviteOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
-          onClick={() => !createStudent.isPending && closeInvite()}
+          onClick={() =>
+            !createStudent.isPending &&
+            !createStudents.isPending &&
+            closeInvite()
+          }
         >
           <form
             onSubmit={handleInviteSubmit}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-lg border border-ink/15 bg-white p-6 font-mono shadow-xl"
+            className={cn(
+              "w-full rounded-lg border border-ink/15 bg-white p-6 font-mono shadow-xl",
+              bulkRows ? "max-w-2xl" : "max-w-md",
+            )}
           >
             <h2 className="font-display text-2xl font-bold text-ink">
-              Invite student
+              {bulkResults
+                ? "Bulk invite results"
+                : bulkRows
+                  ? `Bulk invite · ${bulkRows.length} row${bulkRows.length === 1 ? "" : "s"}`
+                  : "Invite student"}
             </h2>
             <p className="mt-1 text-xs text-ink/60">
-              Creates an account. The student signs in via email OTP.
+              {bulkResults
+                ? "Each created student received a sign-in email."
+                : bulkRows
+                  ? "Review parsed rows below, then send invites."
+                  : "Creates an account. The student signs in via email OTP."}
             </p>
 
-            <label className="mt-5 block text-xs tracking-[0.2em] uppercase text-ink/60">
-              Name
-            </label>
-            <input
-              type="text"
-              value={inviteName}
-              onChange={(e) => setInviteName(e.target.value)}
-              autoFocus
-              required
-              maxLength={80}
-              className="mt-1 h-10 w-full rounded-md border border-ink/20 bg-white px-3 text-sm focus:border-ink/50 focus:outline-none"
-            />
+            {bulkResults ? (
+              <>
+                <div className="mt-5 max-h-80 overflow-y-auto rounded-md border border-ink/15">
+                  <table className="w-full text-left text-xs">
+                    <thead className="sticky top-0 bg-ink text-chalkboard">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">name</th>
+                        <th className="px-3 py-2 font-medium">email</th>
+                        <th className="px-3 py-2 font-medium">result</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bulkResults.map((r, i) => (
+                        <tr key={i} className="border-t border-ink/10">
+                          <td className="px-3 py-2">{r.name}</td>
+                          <td className="px-3 py-2">{r.email}</td>
+                          <td
+                            className={cn(
+                              "px-3 py-2",
+                              r.status === "created"
+                                ? "text-ink"
+                                : "text-slide",
+                            )}
+                          >
+                            {r.status === "created"
+                              ? "✓ invited"
+                              : r.status === "exists"
+                                ? "skipped · email already exists"
+                                : r.status === "duplicate"
+                                  ? "skipped · duplicate in file"
+                                  : `failed${r.message ? ` · ${r.message}` : ""}`}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-6 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={closeInvite}
+                    className="h-9 rounded-full bg-ink px-4 text-sm font-medium text-chalkboard hover:bg-ink/90"
+                  >
+                    done
+                  </button>
+                </div>
+              </>
+            ) : bulkRows ? (
+              <>
+                <div className="mt-5 max-h-80 overflow-y-auto rounded-md border border-ink/15">
+                  <table className="w-full text-left text-xs">
+                    <thead className="sticky top-0 bg-ink text-chalkboard">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">name</th>
+                        <th className="px-3 py-2 font-medium">email</th>
+                        <th className="px-3 py-2 font-medium">track</th>
+                        <th className="px-3 py-2 font-medium">issue</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bulkRows.map((r, i) => (
+                        <tr
+                          key={i}
+                          className={cn(
+                            "border-t border-ink/10",
+                            r.error && "bg-slide/5 text-ink/50",
+                          )}
+                        >
+                          <td className="px-3 py-2">{r.name || "—"}</td>
+                          <td className="px-3 py-2">{r.email || "—"}</td>
+                          <td className="px-3 py-2">{r.track}</td>
+                          <td className="px-3 py-2 text-slide">
+                            {r.error ?? ""}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {bulkRows.some((r) => r.error) && (
+                  <p className="mt-2 text-xs text-slide">
+                    {bulkRows.filter((r) => r.error).length} row
+                    {bulkRows.filter((r) => r.error).length === 1
+                      ? ""
+                      : "s"}{" "}
+                    with issues will be skipped.
+                  </p>
+                )}
+                <div className="mt-6 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBulkRows(null)}
+                    disabled={createStudents.isPending}
+                    className="h-9 rounded-full border border-ink/20 px-4 text-sm hover:border-ink/40 disabled:opacity-50"
+                  >
+                    back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkSubmit}
+                    disabled={
+                      createStudents.isPending ||
+                      bulkRows.every((r) => r.error)
+                    }
+                    className="h-9 rounded-full bg-ink px-4 text-sm font-medium text-chalkboard hover:bg-ink/90 disabled:opacity-50"
+                  >
+                    {createStudents.isPending
+                      ? "inviting…"
+                      : `invite ${bulkRows.filter((r) => !r.error).length} student${bulkRows.filter((r) => !r.error).length === 1 ? "" : "s"}`}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <label className="mt-5 block text-xs tracking-[0.2em] uppercase text-ink/60">
+                  Name
+                </label>
+                <input
+                  type="text"
+                  value={inviteName}
+                  onChange={(e) => setInviteName(e.target.value)}
+                  autoFocus
+                  required
+                  maxLength={80}
+                  className="mt-1 h-10 w-full rounded-md border border-ink/20 bg-white px-3 text-sm focus:border-ink/50 focus:outline-none"
+                />
 
-            <label className="mt-4 block text-xs tracking-[0.2em] uppercase text-ink/60">
-              Email
-            </label>
-            <input
-              type="email"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              required
-              maxLength={200}
-              className="mt-1 h-10 w-full rounded-md border border-ink/20 bg-white px-3 text-sm focus:border-ink/50 focus:outline-none"
-            />
+                <label className="mt-4 block text-xs tracking-[0.2em] uppercase text-ink/60">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  required
+                  maxLength={200}
+                  className="mt-1 h-10 w-full rounded-md border border-ink/20 bg-white px-3 text-sm focus:border-ink/50 focus:outline-none"
+                />
 
-            <label className="mt-4 block text-xs tracking-[0.2em] uppercase text-ink/60">
-              Track
-            </label>
-            <div className="mt-1 flex gap-2">
-              {(["IxD", "DFT"] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setInviteTrack(t)}
-                  className={
-                    "flex-1 h-10 rounded-md border font-display text-base font-bold tracking-wider transition " +
-                    (inviteTrack === t
-                      ? "border-ink bg-ink text-chalkboard"
-                      : "border-ink/20 bg-white text-ink/60 hover:text-ink")
-                  }
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
+                <label className="mt-4 block text-xs tracking-[0.2em] uppercase text-ink/60">
+                  Track
+                </label>
+                <div className="mt-1 flex gap-2">
+                  {(["IxD", "DFT"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setInviteTrack(t)}
+                      className={
+                        "flex-1 h-10 rounded-md border font-display text-base font-bold tracking-wider transition " +
+                        (inviteTrack === t
+                          ? "border-ink bg-ink text-chalkboard"
+                          : "border-ink/20 bg-white text-ink/60 hover:text-ink")
+                      }
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
 
-            <div className="mt-6 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeInvite}
-                disabled={createStudent.isPending}
-                className="h-9 rounded-full border border-ink/20 px-4 text-sm hover:border-ink/40 disabled:opacity-50"
-              >
-                cancel
-              </button>
-              <button
-                type="submit"
-                disabled={
-                  createStudent.isPending ||
-                  !inviteName.trim() ||
-                  !inviteEmail.trim()
-                }
-                className="h-9 rounded-full bg-ink px-4 text-sm font-medium text-chalkboard hover:bg-ink/90 disabled:opacity-50"
-              >
-                {createStudent.isPending ? "adding…" : "add student"}
-              </button>
-            </div>
+                <div className="mt-5 border-t border-dashed border-ink/15 pt-4">
+                  <input
+                    ref={bulkFileRef}
+                    type="file"
+                    accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void handleBulkFile(f);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => bulkFileRef.current?.click()}
+                    className="h-9 w-full rounded-md border border-dashed border-ink/30 text-xs tracking-[0.15em] uppercase text-ink/60 hover:border-ink/50 hover:text-ink"
+                  >
+                    or upload CSV / Excel for bulk invite
+                  </button>
+                  <p className="mt-1 text-[11px] text-ink/40">
+                    Columns: name, email, track (IxD default) — header row
+                    optional.
+                  </p>
+                </div>
+
+                <div className="mt-6 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={closeInvite}
+                    disabled={createStudent.isPending}
+                    className="h-9 rounded-full border border-ink/20 px-4 text-sm hover:border-ink/40 disabled:opacity-50"
+                  >
+                    cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={
+                      createStudent.isPending ||
+                      !inviteName.trim() ||
+                      !inviteEmail.trim()
+                    }
+                    className="h-9 rounded-full bg-ink px-4 text-sm font-medium text-chalkboard hover:bg-ink/90 disabled:opacity-50"
+                  >
+                    {createStudent.isPending ? "adding…" : "add student"}
+                  </button>
+                </div>
+              </>
+            )}
           </form>
         </div>
       )}

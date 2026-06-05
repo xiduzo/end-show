@@ -135,7 +135,7 @@ export function FindMeChip({
             transition={{ duration: 0.18 }}
             onPointerDown={bumpClose}
             onTouchStart={bumpClose}
-            className="text-lego ring-lego/10 absolute left-1/2 mt-3 w-[22rem] -translate-x-1/2 touch-manipulation rounded-2xl bg-[#fdfaf2] p-5 shadow-2xl ring-1 sm:right-0 sm:left-auto sm:w-96 sm:translate-x-0"
+            className="text-lego ring-lego/10 absolute left-1/2 mt-3 w-[22rem] -translate-x-1/2 touch-manipulation rounded-2xl bg-[#fdfaf2] p-5 shadow-2xl ring-1 sm:right-0 sm:left-auto sm:w-[50vw] sm:translate-x-0"
           >
             <p className="text-lego/55 font-mono text-xs font-bold tracking-widest uppercase">
               search

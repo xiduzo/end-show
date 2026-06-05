@@ -40,7 +40,7 @@ export function PortraitColumn({
           <img
             src={portraitUrl}
             alt="Portrait"
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover object-top"
           />
         ) : readOnly ? (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-[repeating-linear-gradient(135deg,rgba(1,1,45,0.04)_0_1px,transparent_1px_8px)] font-mono text-xs text-lego-dark/40">

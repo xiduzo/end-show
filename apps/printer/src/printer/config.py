@@ -1,0 +1,38 @@
+import os
+
+# NT-1809DD is a 58mm printer with a 384-dot print line.
+DOTS_PER_LINE = int(os.environ.get("PRINTER_DOTS", "384"))
+CHARS_PER_LINE = int(os.environ.get("PRINTER_CHARS", "32"))
+
+# usb | serial | file | dummy
+BACKEND = os.environ.get("PRINTER_BACKEND", "usb")
+
+# Find these with `lsusb` (Linux) or `system_profiler SPUSBDataType` (macOS).
+# 0x0416/0x5011 is the id most NT-1809DD units report (Winbond/Nuvoton chipset).
+USB_VENDOR_ID = int(os.environ.get("PRINTER_USB_VENDOR", "0x0416"), 16)
+USB_PRODUCT_ID = int(os.environ.get("PRINTER_USB_PRODUCT", "0x5011"), 16)
+
+# For BACKEND=serial (Bluetooth pairing exposes a tty)
+SERIAL_DEVICE = os.environ.get("PRINTER_SERIAL_DEVICE", "/dev/rfcomm0")
+SERIAL_BAUDRATE = int(os.environ.get("PRINTER_SERIAL_BAUDRATE", "9600"))
+
+# For BACKEND=file (Linux usblp driver)
+FILE_DEVICE = os.environ.get("PRINTER_FILE_DEVICE", "/dev/usb/lp0")
+
+# Tall rasters are sent as strips with a pause in between; the NT-1809DD's
+# small receive buffer overruns (and prints garbage) when a long image is
+# streamed in one go.
+IMAGE_STRIP_HEIGHT = int(os.environ.get("PRINTER_IMAGE_STRIP", "240"))
+IMAGE_STRIP_DELAY_S = int(os.environ.get("PRINTER_IMAGE_DELAY_MS", "120")) / 1000
+# bitImageRaster | bitImageColumn | graphics — try bitImageColumn if raster
+# output is still garbled on your unit
+IMAGE_IMPL = os.environ.get("PRINTER_IMAGE_IMPL", "bitImageRaster")
+
+HOST = os.environ.get("PRINTER_HTTP_HOST", "0.0.0.0")
+PORT = int(os.environ.get("PRINTER_HTTP_PORT", "8765"))
+
+# Hot reload on source changes (set by the `bun dev` script; off in production)
+RELOAD = os.environ.get("PRINTER_RELOAD", "0") == "1"
+
+# Comma-separated list of allowed browser origins, * for any (LAN kiosk default)
+CORS_ORIGINS = os.environ.get("PRINTER_CORS_ORIGINS", "*").split(",")

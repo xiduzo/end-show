@@ -8,6 +8,7 @@ import { STAGE_PALETTE } from "@/features/stage";
 import { useBookLayout } from "./book-layout";
 import { TrackStamp } from "./track-stamp";
 import type { CompanionTier } from "./types";
+import { usePrinter } from "./use-printer";
 import { DEFAULT_ACCENT, hash, initials, rand } from "./wonk";
 
 export function WallShowcase({
@@ -34,6 +35,7 @@ export function WallShowcase({
   const sendDisabled = false;
   const [flying, setFlying] = useState(false);
   const cardControls = useAnimationControls();
+  const printer = usePrinter();
 
   const spring = { type: "spring" as const, stiffness: 220, damping: 28 };
 
@@ -285,20 +287,38 @@ export function WallShowcase({
 
           <div className="mt-auto flex items-end gap-3 pt-6">
             {isMobile ? (
-              student.link && (
-                <a
-                  href={student.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    backgroundColor: palette.accent,
-                    color: palette.dark,
-                  }}
-                  className="flex-1 rounded-full lg:px-5 lg:py-4 py-2 text-center font-mono text-lg font-bold tracking-widest uppercase shadow-md transition hover:brightness-110"
-                >
-                  ↗ visit
-                </a>
-              )
+              <>
+                {student.link && (
+                  <a
+                    href={student.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      backgroundColor: palette.accent,
+                      color: palette.dark,
+                    }}
+                    className="flex-1 rounded-full lg:px-5 lg:py-4 py-2 text-center font-mono text-lg font-bold tracking-widest uppercase shadow-md transition hover:brightness-110"
+                  >
+                    ↗ visit
+                  </a>
+                )}
+                {printer.available && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void printer.print(student);
+                    }}
+                    disabled={printer.printing}
+                    style={{
+                      backgroundColor: palette.dark,
+                      color: palette.accent,
+                    }}
+                    className="flex-1 rounded-full lg:px-5 lg:py-4 py-2 text-center font-mono text-lg font-bold tracking-widest uppercase shadow-md transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {printer.printing ? "printing…" : "⎙ print"}
+                  </button>
+                )}
+              </>
             ) : (
               <>
                 {student.link && (
@@ -337,6 +357,22 @@ export function WallShowcase({
                         ? "bump in queue"
                         : "send to stage"}
                   </button>
+                  {printer.available && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void printer.print(student);
+                      }}
+                      disabled={printer.printing}
+                      style={{
+                        backgroundColor: palette.dark,
+                        color: palette.accent,
+                      }}
+                      className="rounded-full px-5 py-3 text-left font-mono text-sm font-bold tracking-widest uppercase shadow-md transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {printer.printing ? "printing…" : "⎙ print"}
+                    </button>
+                  )}
                 </div>
               </>
             )}

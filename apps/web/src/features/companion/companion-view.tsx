@@ -215,6 +215,7 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
         {showcased && sourceRects && (
           <WallShowcase
             tier={tier}
+            stageCode={stageCode}
             student={showcased}
             sourceCardRect={sourceRects.card}
             sourceImageRect={sourceRects.image}

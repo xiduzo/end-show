@@ -15,7 +15,7 @@ import {
   UpNextBadge,
   resolveWorkMedia,
 } from "@/features/stage";
-import { useStageCode } from "@/features/stage";
+import { usePrinterBridge, useStageCode } from "@/features/stage";
 import { trpc, trpcClient } from "@/lib/trpc";
 import { useStudentUpdates } from "@/lib/use-student-updates";
 import { useTapGesture } from "@/lib/use-tap-gesture";
@@ -59,6 +59,7 @@ function StageRoute() {
   const [queue, setQueue] = useState<QueueSnap | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   useStudentUpdates();
+  usePrinterBridge(stageCode);
   const students = useQuery(trpc.student.listEligible.queryOptions());
 
   useTapGesture({

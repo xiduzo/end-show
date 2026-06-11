@@ -21,6 +21,7 @@ export {
   isValidStageCode,
   useStageCode,
 } from "./stage-code-store";
+export { usePrinterBridge } from "./use-printer-bridge";
 export {
   resolveStageColor,
   StageShaderBackdrop,

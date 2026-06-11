@@ -1,33 +1,36 @@
+import type { PrinterSnapshot } from "@end-show/api/printer/relay";
 import type { StudentSummary } from "@end-show/api/routers/student";
 import { useCallback, useEffect, useState } from "react";
 
-// Local print service (apps/printer) running on the machine the NT-1809DD
-// is plugged into. Override when the companion runs on a different device
-// than the printer host (e.g. iPad next to a Raspberry Pi).
-const PRINTER_URL =
-  (import.meta.env.VITE_PRINTER_URL as string | undefined) ??
-  "http://localhost:8765";
+import { trpcClient } from "@/lib/trpc";
 
-export function usePrinter() {
+// The printer hangs off the Stage machine, not this device (e.g. an iPad on
+// a hosted site can never reach localhost). Availability and print jobs are
+// relayed through the server, keyed by the paired stageCode.
+export function usePrinter(stageCode: string | null) {
   const [available, setAvailable] = useState(false);
   const [printing, setPrinting] = useState(false);
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetch(`${PRINTER_URL}/health`, { signal: controller.signal })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setAvailable(data?.printer === true))
-      .catch(() => setAvailable(false));
-    return () => controller.abort();
-  }, []);
+    const sub = trpcClient.printer.watch.subscribe(
+      { stageCode },
+      {
+        onData: (d) => setAvailable((d as PrinterSnapshot).available),
+        onError: (e) => {
+          console.error("printer.watch error", e);
+          setAvailable(false);
+        },
+      },
+    );
+    return () => sub.unsubscribe();
+  }, [stageCode]);
 
-  const print = useCallback(async (student: StudentSummary) => {
-    setPrinting(true);
-    try {
-      const res = await fetch(`${PRINTER_URL}/print`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+  const print = useCallback(
+    async (student: StudentSummary) => {
+      setPrinting(true);
+      try {
+        const res = await trpcClient.printer.print.mutate({
+          stageCode,
           displayName: student.displayName,
           pronouns: student.pronouns,
           track: student.track,
@@ -35,15 +38,16 @@ export function usePrinter() {
           competencies: student.competencies,
           link: student.link,
           portraitUrl: student.portraitUrl,
-        }),
-      });
-      return res.ok;
-    } catch {
-      return false;
-    } finally {
-      setPrinting(false);
-    }
-  }, []);
+        });
+        return res.ok;
+      } catch {
+        return false;
+      } finally {
+        setPrinting(false);
+      }
+    },
+    [stageCode],
+  );
 
   return { available, printing, print };
 }

@@ -13,6 +13,7 @@ import { DEFAULT_ACCENT, hash, initials, rand } from "./wonk";
 
 export function WallShowcase({
   tier,
+  stageCode,
   student,
   sourceCardRect,
   sourceImageRect,
@@ -22,6 +23,7 @@ export function WallShowcase({
   onSend,
 }: {
   tier: CompanionTier;
+  stageCode: string | null;
   student: StudentSummary;
   sourceCardRect: DOMRect;
   sourceImageRect: DOMRect;
@@ -35,7 +37,7 @@ export function WallShowcase({
   const sendDisabled = false;
   const [flying, setFlying] = useState(false);
   const cardControls = useAnimationControls();
-  const printer = usePrinter();
+  const printer = usePrinter(stageCode);
 
   const spring = { type: "spring" as const, stiffness: 220, damping: 28 };
 

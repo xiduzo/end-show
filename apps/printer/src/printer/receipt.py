@@ -181,7 +181,15 @@ def _render_student(student: dict) -> Image.Image:
         canvas.space(6)
         canvas.paste(_qr_image(link))
         canvas.space(8)
-        canvas.text(link, size=16, center=True)
+        # the QR carries the full URL; the printed label drops the scheme
+        # and steps the font down (like the name) to stay on one line
+        label = link.removeprefix("https://").removeprefix("http://").rstrip("/")
+        label_size = 16
+        for size in range(16, 9, -1):
+            label_size = size
+            if probe.textlength(label, font=_font(size, "mono")) <= WIDTH - MARGIN * 2:
+                break
+        canvas.text(label, size=label_size, center=True)
 
     # trailing whitespace so the last section clears the print head / tear bar
     canvas.space(8)

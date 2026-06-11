@@ -4,8 +4,9 @@ import os
 DOTS_PER_LINE = int(os.environ.get("PRINTER_DOTS", "384"))
 CHARS_PER_LINE = int(os.environ.get("PRINTER_CHARS", "32"))
 
-# usb | serial | file | dummy
-BACKEND = os.environ.get("PRINTER_BACKEND", "usb")
+# auto | usb | bluetooth | serial | file | dummy
+# auto tries usb first, then a paired bluetooth serial port
+BACKEND = os.environ.get("PRINTER_BACKEND", "auto")
 
 # Find these with `lsusb` (Linux) or `system_profiler SPUSBDataType` (macOS).
 # 0x0416/0x5011 is the id most NT-1809DD units report (Winbond/Nuvoton chipset).
@@ -15,6 +16,14 @@ USB_PRODUCT_ID = int(os.environ.get("PRINTER_USB_PRODUCT", "0x5011"), 16)
 # For BACKEND=serial (Bluetooth pairing exposes a tty)
 SERIAL_DEVICE = os.environ.get("PRINTER_SERIAL_DEVICE", "/dev/rfcomm0")
 SERIAL_BAUDRATE = int(os.environ.get("PRINTER_SERIAL_BAUDRATE", "9600"))
+
+# For BACKEND=bluetooth. Pairing the printer in the OS exposes a serial
+# port (/dev/cu.<Name> on macOS, /dev/rfcomm* on Linux) which is
+# auto-discovered; pin it explicitly if discovery picks the wrong one.
+BT_DEVICE = os.environ.get("PRINTER_BT_DEVICE", "")
+# Substring of the port name to prefer during discovery (e.g. "1809")
+BT_HINT = os.environ.get("PRINTER_BT_HINT", "").lower()
+BT_BAUDRATE = int(os.environ.get("PRINTER_BT_BAUDRATE", "9600"))
 
 # For BACKEND=file (Linux usblp driver)
 FILE_DEVICE = os.environ.get("PRINTER_FILE_DEVICE", "/dev/usb/lp0")

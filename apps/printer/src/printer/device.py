@@ -1,5 +1,6 @@
 """Connection to the NT-1809DD over the configured backend."""
 
+import glob
 import threading
 
 from escpos.printer import Dummy, File, Serial, Usb
@@ -11,14 +12,64 @@ PROFILE = "default"
 
 _lock = threading.Lock()
 
+# Ports that show up in /dev/cu.* on macOS but are never the printer
+_BT_EXCLUDE = ("bluetooth-incoming-port", "debug-console", "wlan")
+# USB-serial adapters also live under /dev/cu.* — not bluetooth
+_BT_EXCLUDE_PREFIXES = ("cu.usbserial", "cu.usbmodem")
+
+
+def discover_bluetooth() -> str:
+    """Find the serial port of a paired bluetooth printer.
+
+    Pairing in the OS is what creates the port; this only picks it out.
+    """
+    if config.BT_DEVICE:
+        return config.BT_DEVICE
+    candidates = sorted(glob.glob("/dev/cu.*") + glob.glob("/dev/rfcomm*"))
+    matches = []
+    for path in candidates:
+        name = path.rsplit("/", 1)[-1].lower()
+        if any(x in name for x in _BT_EXCLUDE):
+            continue
+        if name.startswith(_BT_EXCLUDE_PREFIXES):
+            continue
+        if config.BT_HINT and config.BT_HINT not in name:
+            continue
+        matches.append(path)
+    if not matches:
+        raise RuntimeError(
+            "no paired bluetooth serial port found — pair the printer in the "
+            "OS bluetooth settings first, or set PRINTER_BT_DEVICE"
+        )
+    return matches[0]
+
+
+def _connect_usb():
+    return Usb(
+        config.USB_VENDOR_ID,
+        config.USB_PRODUCT_ID,
+        profile=PROFILE,
+    )
+
+
+def _connect_bluetooth():
+    return Serial(
+        devfile=discover_bluetooth(),
+        baudrate=config.BT_BAUDRATE,
+        profile=PROFILE,
+    )
+
 
 def _connect():
+    if config.BACKEND == "auto":
+        try:
+            return _connect_usb()
+        except Exception:
+            return _connect_bluetooth()
     if config.BACKEND == "usb":
-        return Usb(
-            config.USB_VENDOR_ID,
-            config.USB_PRODUCT_ID,
-            profile=PROFILE,
-        )
+        return _connect_usb()
+    if config.BACKEND == "bluetooth":
+        return _connect_bluetooth()
     if config.BACKEND == "serial":
         return Serial(
             devfile=config.SERIAL_DEVICE,

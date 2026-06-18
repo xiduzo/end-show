@@ -16,10 +16,12 @@ URL="https://show.xiduzo.com/"
 UV="$(command -v uv)"
 
 # Bluetooth-paired printer (pair it once in System Settings → Bluetooth first).
+# macOS names the SPP node after the printer's advertised BT name, which for
+# the NT-1809DD is the generic "BlueToothPrinter" -> /dev/cu.BlueToothPrinter.
 # Pin the port if auto-discovery picks the wrong one:
-#   export PRINTER_BT_DEVICE="/dev/cu.NT-1809DD"
+#   export PRINTER_BT_DEVICE="/dev/cu.BlueToothPrinter"
 export PRINTER_BACKEND="${PRINTER_BACKEND:-bluetooth}"
-export PRINTER_BT_HINT="${PRINTER_BT_HINT:-1809}"
+export PRINTER_BT_HINT="${PRINTER_BT_HINT:-printer}"
 
 # a) open the Stage page in the default browser (returns immediately)
 open "$URL"

@@ -41,8 +41,12 @@ def _print_job(payload: dict) -> None:
 
 
 def _probe_printer() -> bool:
+    # Opening the port is not proof it prints — a virtual BT SPP node opens
+    # even when the link is dead. Write an ESC @ (init) so a stalled write
+    # surfaces here (via write_timeout) instead of only on the first /print.
     try:
-        with device.session():
+        with device.session() as printer:
+            printer._raw(b"\x1b\x40")
             return True
     except Exception as error:
         log.info("printer probe failed: %s", error)

@@ -79,6 +79,12 @@ def _connect_bluetooth():
         devfile=discover_bluetooth(),
         baudrate=config.BT_BAUDRATE,
         profile=PROFILE,
+        # Virtual BT SPP ports never assert DSR, so the default dsrdtr=True
+        # hardware handshake makes every write block forever (the "freeze").
+        dsrdtr=False,
+        xonxoff=False,
+        # Never hang indefinitely: surface a timeout as a 503 instead.
+        write_timeout=config.WRITE_TIMEOUT_S,
     )
 
 
@@ -97,6 +103,9 @@ def _connect():
             devfile=config.SERIAL_DEVICE,
             baudrate=config.SERIAL_BAUDRATE,
             profile=PROFILE,
+            dsrdtr=False,
+            xonxoff=False,
+            write_timeout=config.WRITE_TIMEOUT_S,
         )
     if config.BACKEND == "file":
         return File(config.FILE_DEVICE, profile=PROFILE)

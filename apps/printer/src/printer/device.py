@@ -79,6 +79,11 @@ def available() -> bool:
     The real write-probe runs once at startup instead.
     """
     try:
+        if config.BACKEND == "ble":
+            # A BLE presence check means a multi-second scan; doing that on every
+            # 10s /health poll would churn the radio and collide with prints.
+            # Report configured-OK and let real prints surface a dead link.
+            return True
         if config.BACKEND == "netum":
             discover_bluetooth(quiet=True)
             return True

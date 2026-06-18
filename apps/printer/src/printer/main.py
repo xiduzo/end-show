@@ -11,7 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import config, device, netum, receipt
+from . import ble, config, device, netum, receipt
 
 log = logging.getLogger("printer")
 
@@ -80,7 +80,12 @@ async def health():
 async def print_student(request: PrintRequest):
     payload = request.model_dump()
     try:
-        await run_in_threadpool(_print_job, payload)
+        if config.BACKEND == "ble":
+            # BLE is async: render bytes off the loop, then stream them over GATT.
+            data = await run_in_threadpool(receipt.render_student_bytes, payload)
+            await ble.send(data)
+        else:
+            await run_in_threadpool(_print_job, payload)
     except Exception as error:
         log.warning("print failed for %s: %s", request.displayName, error)
         raise HTTPException(status_code=503, detail=f"printer error: {error}")
@@ -91,19 +96,22 @@ async def print_student(request: PrintRequest):
 @app.post("/test")
 async def print_test():
     try:
-        def job():
-            if config.BACKEND == "netum":
-                with netum.NetumPrinter() as printer:
-                    if not printer.is_connected:
-                        raise RuntimeError(f"netum: could not connect to {printer.port}")
-                    # plain text proves the channel; then the raster page proves imaging
-                    netum.print_connection_test(printer)
-                    printer.print_bytes(receipt.render_test_bytes())
-                return
-            with device.session() as printer:
-                receipt.print_test_page(printer)
+        if config.BACKEND == "ble":
+            await ble.send(await run_in_threadpool(receipt.render_test_bytes))
+        else:
+            def job():
+                if config.BACKEND == "netum":
+                    with netum.NetumPrinter() as printer:
+                        if not printer.is_connected:
+                            raise RuntimeError(f"netum: could not connect to {printer.port}")
+                        # plain text proves the channel; then the raster page proves imaging
+                        netum.print_connection_test(printer)
+                        printer.print_bytes(receipt.render_test_bytes())
+                    return
+                with device.session() as printer:
+                    receipt.print_test_page(printer)
 
-        await run_in_threadpool(job)
+            await run_in_threadpool(job)
     except Exception as error:
         raise HTTPException(status_code=503, detail=f"printer error: {error}")
     return {"printed": "test page"}
@@ -150,7 +158,11 @@ def run():
     # yet puts visible marks on paper — real proof the raster path works).
     if config.TEST_ON_START:
         try:
-            if config.BACKEND == "netum":
+            if config.BACKEND == "ble":
+                import asyncio
+
+                asyncio.run(ble.probe())
+            elif config.BACKEND == "netum":
                 with netum.NetumPrinter() as printer:
                     if not printer.is_connected:
                         raise RuntimeError(f"netum: could not connect to {printer.port}")

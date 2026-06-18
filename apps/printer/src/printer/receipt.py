@@ -214,8 +214,9 @@ def print_student(printer, student: dict) -> None:
     competencies (list[str]), link, portraitUrl — all optional but displayName.
     """
     _send_image(printer, _render_student(student))
-    # No cutter on the NT-1809DD: feed past the tear bar instead
-    printer.print_and_feed(3)
+    # No cutter on the NT-1809DD: feed past the tear bar, plus extra bottom
+    # margin so there's clean whitespace before the tear.
+    printer.print_and_feed(7)
 
 
 def print_test_page(printer) -> None:

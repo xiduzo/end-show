@@ -1,5 +1,12 @@
 import os
 
+from dotenv import load_dotenv
+
+# Load apps/printer/.env if present. Real environment variables (exported in
+# start-show.sh or the launchd plist) take precedence — .env only fills gaps,
+# so it is a convenient local override without clobbering production config.
+load_dotenv()
+
 # NT-1809DD is a 58mm printer with a 384-dot print line.
 DOTS_PER_LINE = int(os.environ.get("PRINTER_DOTS", "384"))
 CHARS_PER_LINE = int(os.environ.get("PRINTER_CHARS", "32"))

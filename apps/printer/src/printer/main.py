@@ -41,9 +41,10 @@ def _print_job(payload: dict) -> None:
 
 
 def _probe_printer() -> bool:
-    # Opening the port is not proof it prints — a virtual BT SPP node opens
-    # even when the link is dead. Write an ESC @ (init) so a stalled write
-    # surfaces here (via write_timeout) instead of only on the first /print.
+    # Startup-only write probe: opening a virtual BT SPP node is not proof it
+    # prints, so write an ESC @ (init) and rely on write_timeout to surface a
+    # dead link. NOT used by /health — a blocking write under _lock on every
+    # poll would starve /print.
     try:
         with device.session() as printer:
             printer._raw(b"\x1b\x40")
@@ -55,12 +56,12 @@ def _probe_printer() -> bool:
 
 @app.get("/health")
 async def health():
-    # printer=True only when we can actually open the device, so the
-    # companion UI hides its print button when nothing is attached
-    printer = await run_in_threadpool(_probe_printer)
+    # Cheap, non-blocking: report whether a printer target is resolvable.
+    # /health is polled every 10s by the Stage bridge and shares _lock with
+    # /print, so it must never open or write the port.
     return {
         "ok": True,
-        "printer": printer,
+        "printer": device.available(),
         "backend": config.BACKEND,
         "serial_ports": device.list_serial_ports(),
     }

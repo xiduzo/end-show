@@ -2,6 +2,7 @@
 
 import glob
 import logging
+import os
 import threading
 
 from escpos.printer import Dummy, File, Serial, Usb
@@ -27,16 +28,20 @@ def list_serial_ports() -> list[str]:
     return sorted(glob.glob("/dev/cu.*") + glob.glob("/dev/rfcomm*"))
 
 
-def discover_bluetooth() -> str:
+def discover_bluetooth(quiet: bool = False) -> str:
     """Find the serial port of a paired bluetooth printer.
 
     Pairing in the OS is what creates the port; this only picks it out.
+    Resolves a path only — it never opens the port. `quiet=True` suppresses
+    the INFO scan/selection logs so /health can call it on every poll without
+    spamming the log.
     """
+    info = (lambda *a: None) if quiet else log.info
     if config.BT_DEVICE:
-        log.info("bluetooth: using pinned PRINTER_BT_DEVICE=%s", config.BT_DEVICE)
+        info("bluetooth: using pinned PRINTER_BT_DEVICE=%s", config.BT_DEVICE)
         return config.BT_DEVICE
     candidates = sorted(glob.glob("/dev/cu.*") + glob.glob("/dev/rfcomm*"))
-    log.info(
+    info(
         "bluetooth: scanning serial ports (hint=%r): %s",
         config.BT_HINT or "(none)",
         candidates or "(no /dev/cu.* or /dev/rfcomm* ports at all)",
@@ -62,8 +67,31 @@ def discover_bluetooth() -> str:
             "actively connected), pair it in the OS bluetooth settings, or set "
             "PRINTER_BT_DEVICE"
         )
-    log.info("bluetooth: selected %s (candidates: %s)", matches[0], matches)
+    info("bluetooth: selected %s (candidates: %s)", matches[0], matches)
     return matches[0]
+
+
+def available() -> bool:
+    """Cheap, non-blocking availability for /health (polled every 10s).
+
+    Reports whether a printer *target* is resolvable. It deliberately does
+    NOT open or write the port: opening on every poll churns the serial link,
+    and a write that can't drain would block under _lock and starve /print.
+    The real write-probe runs once at startup instead.
+    """
+    try:
+        backend = config.BACKEND
+        if backend in ("bluetooth", "auto"):
+            discover_bluetooth(quiet=True)
+            return True
+        if backend == "serial":
+            return os.path.exists(config.SERIAL_DEVICE)
+        if backend == "file":
+            return os.path.exists(config.FILE_DEVICE)
+        # usb / dummy: no cheap presence check; assume configured correctly
+        return True
+    except Exception:
+        return False
 
 
 def _connect_usb():

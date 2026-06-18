@@ -11,7 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import ble, config, device, receipt
+from . import config, device, netum, receipt
 
 log = logging.getLogger("printer")
 
@@ -36,6 +36,15 @@ class PrintRequest(BaseModel):
 
 
 def _print_job(payload: dict) -> None:
+    if config.BACKEND == "netum":
+        # netum owns the wire itself: render the rich receipt to raw ESC/POS
+        # bytes and stream them over the direct pyserial connection.
+        data = receipt.render_student_bytes(payload)
+        with netum.NetumPrinter() as printer:
+            if not printer.is_connected:
+                raise RuntimeError(f"netum: could not connect to {printer.port}")
+            printer.print_bytes(data)
+        return
     with device.session() as printer:
         receipt.print_student(printer, payload)
 
@@ -71,12 +80,7 @@ async def health():
 async def print_student(request: PrintRequest):
     payload = request.model_dump()
     try:
-        if config.BACKEND == "ble":
-            # BLE is async: render bytes off the loop, then stream them over GATT.
-            data = await run_in_threadpool(receipt.render_student_bytes, payload)
-            await ble.send(data)
-        else:
-            await run_in_threadpool(_print_job, payload)
+        await run_in_threadpool(_print_job, payload)
     except Exception as error:
         log.warning("print failed for %s: %s", request.displayName, error)
         raise HTTPException(status_code=503, detail=f"printer error: {error}")
@@ -87,14 +91,19 @@ async def print_student(request: PrintRequest):
 @app.post("/test")
 async def print_test():
     try:
-        if config.BACKEND == "ble":
-            await ble.send(await run_in_threadpool(receipt.render_test_bytes))
-        else:
-            def job():
-                with device.session() as printer:
-                    receipt.print_test_page(printer)
+        def job():
+            if config.BACKEND == "netum":
+                with netum.NetumPrinter() as printer:
+                    if not printer.is_connected:
+                        raise RuntimeError(f"netum: could not connect to {printer.port}")
+                    # plain text proves the channel; then the raster page proves imaging
+                    netum.print_connection_test(printer)
+                    printer.print_bytes(receipt.render_test_bytes())
+                return
+            with device.session() as printer:
+                receipt.print_test_page(printer)
 
-            await run_in_threadpool(job)
+        await run_in_threadpool(job)
     except Exception as error:
         raise HTTPException(status_code=503, detail=f"printer error: {error}")
     return {"printed": "test page"}
@@ -135,15 +144,17 @@ def run():
     # Show at boot whether the printer is reachable, instead of only finding out
     # on the first /print (a 503). The self-test IS the probe — printing it
     # proves the link — so open the printer once, not twice: opening a virtual
-    # BT SPP port churns the link and can drop the connection. It sends only a
-    # few plaintext bytes (not the ~11KB raster test page) so a timeout here
-    # means the link is truly dead, not just too slow for a big image.
+    # BT SPP port churns the link and can drop the connection. It prints a small
+    # raster (this clone ignores ESC/POS plaintext and would feed blank paper,
+    # "succeeding" without proving anything; a short bitmap instead drains fast
+    # yet puts visible marks on paper — real proof the raster path works).
     if config.TEST_ON_START:
         try:
-            if config.BACKEND == "ble":
-                import asyncio
-
-                asyncio.run(ble.probe())
+            if config.BACKEND == "netum":
+                with netum.NetumPrinter() as printer:
+                    if not printer.is_connected:
+                        raise RuntimeError(f"netum: could not connect to {printer.port}")
+                    netum.print_connection_test(printer)
             else:
                 with device.session() as printer:
                     receipt.print_self_test(printer)

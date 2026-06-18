@@ -13,7 +13,6 @@ from pathlib import Path
 
 import httpx
 import qrcode
-from escpos.printer import Dummy
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from . import config
@@ -221,21 +220,24 @@ def print_student(printer, student: dict) -> None:
 
 
 def print_self_test(printer) -> None:
-    """Minimal plaintext proof-of-life: a handful of bytes, no raster.
+    """Small RASTER proof-of-life, printed once at startup.
 
-    The full raster test page (print_test_page) leads with an ~11KB image
-    strip; if the BT SPP link honours the 9600 baud it can't drain that inside
-    the write timeout, so a raster failure can't tell "link is dead" from
-    "link is too slow for a big image". This sends only ESC @ + a few text
-    lines + a feed (well under a second at any baud), so a timeout here means
-    the channel genuinely isn't draining, while success proves the link works
-    and points the finger at raster size / baud.
+    The NT-1809DD is a raster-preferring clone: a plaintext `printer.text()`
+    self-test clocks out of the serial port (the write 'succeeds' and the log
+    says ✓) yet the printer marks no paper — exactly the "nothing printed on
+    boot" symptom. Render the proof-of-life as a 1-bit bitmap and push it
+    through the same strip/drain path as a real receipt, so a printed self-test
+    genuinely proves the raster pipeline end to end, not just that bytes left
+    the port. Kept to a few short lines (one strip) so it drains well inside
+    the write timeout even at 9600 baud.
     """
-    printer._raw(b"\x1b\x40")  # ESC @ — reset to a known state
-    printer.set(align="center")
-    printer.text("end-show printer\n")
-    printer.text("self-test OK\n")
-    printer.text("link is alive\n")
+    canvas = _Canvas()
+    canvas.text("end-show printer", size=28, style="display", center=True)
+    canvas.space(4)
+    canvas.text("self-test OK", size=22, style="mono-bold", center=True)
+    canvas.text("raster link alive", size=18, center=True)
+    canvas.space(8)
+    _send_image(printer, canvas.to_print())
     printer.print_and_feed(4)
 
 
@@ -256,23 +258,24 @@ def print_test_page(printer) -> None:
     printer.print_and_feed(4)
 
 
-# --- byte renderers for the BLE backend -------------------------------------
-# escpos has no BLE transport, so for BACKEND=ble we render into a Dummy (which
-# captures the exact ESC/POS byte stream) and hand the bytes to ble.send().
+def render_student_bytes(student: dict) -> bytes:
+    """Render a student receipt to raw ESC/POS bytes.
 
-def _render_bytes(emit) -> bytes:
+    For transports that own the serial wire themselves (the netum backend):
+    the exact same rich raster pipeline as print_student runs against an escpos
+    Dummy, whose accumulated output is the byte stream to send.
+    """
+    from escpos.printer import Dummy
+
     dummy = Dummy(profile="default")
-    emit(dummy)
+    print_student(dummy, student)
     return dummy.output
 
 
-def render_student_bytes(student: dict) -> bytes:
-    return _render_bytes(lambda p: print_student(p, student))
-
-
 def render_test_bytes() -> bytes:
-    return _render_bytes(print_test_page)
+    """Raster test page rendered to raw ESC/POS bytes (see render_student_bytes)."""
+    from escpos.printer import Dummy
 
-
-def render_self_test_bytes() -> bytes:
-    return _render_bytes(print_self_test)
+    dummy = Dummy(profile="default")
+    print_test_page(dummy)
+    return dummy.output

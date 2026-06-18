@@ -81,6 +81,11 @@ def available() -> bool:
     """
     try:
         backend = config.BACKEND
+        if backend == "ble":
+            # A BLE presence check means a multi-second scan; doing that on every
+            # 10s /health poll would churn the radio and collide with prints.
+            # Report configured-OK and let real prints surface a dead link.
+            return True
         if backend in ("bluetooth", "auto"):
             discover_bluetooth(quiet=True)
             return True

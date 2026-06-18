@@ -11,7 +11,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from . import config, device, receipt
+from . import ble, config, device, receipt
 
 log = logging.getLogger("printer")
 
@@ -69,8 +69,14 @@ async def health():
 
 @app.post("/print")
 async def print_student(request: PrintRequest):
+    payload = request.model_dump()
     try:
-        await run_in_threadpool(_print_job, request.model_dump())
+        if config.BACKEND == "ble":
+            # BLE is async: render bytes off the loop, then stream them over GATT.
+            data = await run_in_threadpool(receipt.render_student_bytes, payload)
+            await ble.send(data)
+        else:
+            await run_in_threadpool(_print_job, payload)
     except Exception as error:
         log.warning("print failed for %s: %s", request.displayName, error)
         raise HTTPException(status_code=503, detail=f"printer error: {error}")
@@ -80,12 +86,15 @@ async def print_student(request: PrintRequest):
 
 @app.post("/test")
 async def print_test():
-    def job():
-        with device.session() as printer:
-            receipt.print_test_page(printer)
-
     try:
-        await run_in_threadpool(job)
+        if config.BACKEND == "ble":
+            await ble.send(await run_in_threadpool(receipt.render_test_bytes))
+        else:
+            def job():
+                with device.session() as printer:
+                    receipt.print_test_page(printer)
+
+            await run_in_threadpool(job)
     except Exception as error:
         raise HTTPException(status_code=503, detail=f"printer error: {error}")
     return {"printed": "test page"}
@@ -124,17 +133,24 @@ def run():
             "while connected)"
         )
     # Show at boot whether the printer is reachable, instead of only finding out
-    # on the first /print (a 503). When the test page is enabled it IS the probe
-    # — printing it proves the link — so open the printer once, not twice:
-    # opening a virtual BT SPP port churns the link and can drop the connection.
+    # on the first /print (a 503). The self-test IS the probe — printing it
+    # proves the link — so open the printer once, not twice: opening a virtual
+    # BT SPP port churns the link and can drop the connection. It sends only a
+    # few plaintext bytes (not the ~11KB raster test page) so a timeout here
+    # means the link is truly dead, not just too slow for a big image.
     if config.TEST_ON_START:
         try:
-            with device.session() as printer:
-                receipt.print_test_page(printer)
-            log.info("startup test page printed ✓ — printer reachable")
+            if config.BACKEND == "ble":
+                import asyncio
+
+                asyncio.run(ble.probe())
+            else:
+                with device.session() as printer:
+                    receipt.print_self_test(printer)
+            log.info("startup self-test printed ✓ — printer reachable")
         except Exception as error:
             log.warning(
-                "startup test page failed — printer NOT reachable (%s); /print "
+                "startup self-test failed — printer NOT reachable (%s); /print "
                 "will 503 until the printer is connected (see scan above)",
                 error,
             )

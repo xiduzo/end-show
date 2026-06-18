@@ -13,6 +13,7 @@ from pathlib import Path
 
 import httpx
 import qrcode
+from escpos.printer import Dummy
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from . import config
@@ -219,6 +220,25 @@ def print_student(printer, student: dict) -> None:
     printer.print_and_feed(7)
 
 
+def print_self_test(printer) -> None:
+    """Minimal plaintext proof-of-life: a handful of bytes, no raster.
+
+    The full raster test page (print_test_page) leads with an ~11KB image
+    strip; if the BT SPP link honours the 9600 baud it can't drain that inside
+    the write timeout, so a raster failure can't tell "link is dead" from
+    "link is too slow for a big image". This sends only ESC @ + a few text
+    lines + a feed (well under a second at any baud), so a timeout here means
+    the channel genuinely isn't draining, while success proves the link works
+    and points the finger at raster size / baud.
+    """
+    printer._raw(b"\x1b\x40")  # ESC @ — reset to a known state
+    printer.set(align="center")
+    printer.text("end-show printer\n")
+    printer.text("self-test OK\n")
+    printer.text("link is alive\n")
+    printer.print_and_feed(4)
+
+
 def print_test_page(printer) -> None:
     _send_image(
         printer,
@@ -234,3 +254,25 @@ def print_test_page(printer) -> None:
         ),
     )
     printer.print_and_feed(4)
+
+
+# --- byte renderers for the BLE backend -------------------------------------
+# escpos has no BLE transport, so for BACKEND=ble we render into a Dummy (which
+# captures the exact ESC/POS byte stream) and hand the bytes to ble.send().
+
+def _render_bytes(emit) -> bytes:
+    dummy = Dummy(profile="default")
+    emit(dummy)
+    return dummy.output
+
+
+def render_student_bytes(student: dict) -> bytes:
+    return _render_bytes(lambda p: print_student(p, student))
+
+
+def render_test_bytes() -> bytes:
+    return _render_bytes(print_test_page)
+
+
+def render_self_test_bytes() -> bytes:
+    return _render_bytes(print_self_test)

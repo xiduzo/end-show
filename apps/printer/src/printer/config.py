@@ -11,8 +11,10 @@ load_dotenv()
 DOTS_PER_LINE = int(os.environ.get("PRINTER_DOTS", "384"))
 CHARS_PER_LINE = int(os.environ.get("PRINTER_CHARS", "32"))
 
-# auto | usb | bluetooth | serial | file | dummy
-# auto tries usb first, then a paired bluetooth serial port
+# auto | usb | bluetooth | ble | serial | file | dummy
+# auto tries usb first, then a paired bluetooth serial port.
+# ble = Bluetooth Low Energy (4.0): dual-mode units (e.g. M58-LL) whose Classic
+# SPP port connects but never prints — the engine only reads the BLE channel.
 BACKEND = os.environ.get("PRINTER_BACKEND", "auto")
 
 # Find these with `lsusb` (Linux) or `system_profiler SPUSBDataType` (macOS).
@@ -31,6 +33,25 @@ BT_DEVICE = os.environ.get("PRINTER_BT_DEVICE", "")
 # Substring of the port name to prefer during discovery (e.g. "1809")
 BT_HINT = os.environ.get("PRINTER_BT_HINT", "").lower()
 BT_BAUDRATE = int(os.environ.get("PRINTER_BT_BAUDRATE", "9600"))
+
+# For BACKEND=ble. macOS hides names in passive scans, so pin the printer by
+# its CoreBluetooth address (discover it with ble_probe.py); PRINTER_BLE_NAME is
+# a fallback substring match. Leave the write characteristic auto-detected unless
+# discovery picks the wrong one.
+BLE_ADDRESS = os.environ.get("PRINTER_BLE_ADDRESS", "").strip()
+BLE_NAME = os.environ.get("PRINTER_BLE_NAME", "").strip().lower()
+BLE_WRITE_CHAR = os.environ.get("PRINTER_BLE_WRITE_CHAR", "").strip().lower()
+BLE_SCAN_TIMEOUT_S = float(os.environ.get("PRINTER_BLE_SCAN_TIMEOUT_S", "10"))
+BLE_CONNECT_TIMEOUT_S = float(os.environ.get("PRINTER_BLE_CONNECT_TIMEOUT_S", "20"))
+# Chunk size for GATT writes; 0 = derive from the negotiated MTU. A small delay
+# between chunks keeps the printer's tiny receive buffer from overrunning.
+BLE_CHUNK = int(os.environ.get("PRINTER_BLE_CHUNK", "0"))
+BLE_CHUNK_DELAY_MS = int(os.environ.get("PRINTER_BLE_CHUNK_DELAY_MS", "20"))
+# write-without-response returns once a chunk is queued, not delivered. Disconnect
+# fires when the job's `with` block exits, so without a drain the last (or only)
+# packet is dropped before it transmits — small jobs print nothing. Hold the link
+# open briefly after the final write so the radio flushes.
+BLE_FLUSH_DELAY_MS = int(os.environ.get("PRINTER_BLE_FLUSH_DELAY_MS", "500"))
 
 # Write timeouts. escpos.Serial forwards only pyserial's READ timeout, and
 # escpos.Usb defaults to 0 (= block forever). Without an explicit write timeout

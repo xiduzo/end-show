@@ -32,6 +32,13 @@ BT_DEVICE = os.environ.get("PRINTER_BT_DEVICE", "")
 BT_HINT = os.environ.get("PRINTER_BT_HINT", "").lower()
 BT_BAUDRATE = int(os.environ.get("PRINTER_BT_BAUDRATE", "9600"))
 
+# Write timeouts. escpos.Serial forwards only pyserial's READ timeout, and
+# escpos.Usb defaults to 0 (= block forever). Without an explicit write timeout
+# a stalled link hangs the write — and the request holding the device _lock —
+# indefinitely. Bound both so a dead link surfaces as a 503 instead.
+SERIAL_WRITE_TIMEOUT_S = float(os.environ.get("PRINTER_WRITE_TIMEOUT_S", "10"))
+USB_TIMEOUT_MS = int(os.environ.get("PRINTER_USB_TIMEOUT_MS", "2000"))
+
 # Print a test receipt once at startup so the operator gets physical
 # confirmation the printer works, without touching the HTTP/relay path.
 TEST_ON_START = os.environ.get("PRINTER_TEST_ON_START", "1") == "1"

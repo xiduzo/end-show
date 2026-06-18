@@ -98,39 +98,81 @@ def _connect_usb():
     return Usb(
         config.USB_VENDOR_ID,
         config.USB_PRODUCT_ID,
+        # escpos default is 0 = block forever; bound writes so a dead handle
+        # (and the `auto` write-probe below) fails fast instead of hanging.
+        timeout=config.USB_TIMEOUT_MS,
         profile=PROFILE,
     )
+
+
+def _with_write_timeout(printer):
+    """Bound how long a serial write may block.
+
+    escpos.Serial.open() forwards only pyserial's READ timeout, so a stalled SPP
+    link blocks writes — and the request holding _lock — forever. escpos opens
+    the port in __init__, so .device is already live; set write_timeout on it so
+    a non-draining write raises SerialTimeoutException (-> 503) instead of hanging.
+    """
+    printer.device.write_timeout = config.SERIAL_WRITE_TIMEOUT_S
+    return printer
 
 
 def _connect_bluetooth():
-    return Serial(
-        devfile=discover_bluetooth(),
-        baudrate=config.BT_BAUDRATE,
-        profile=PROFILE,
-        # Virtual BT SPP ports never assert DSR, so the default dsrdtr=True
-        # hardware handshake makes every write block forever (the "freeze").
-        dsrdtr=False,
-        xonxoff=False,
+    return _with_write_timeout(
+        Serial(
+            devfile=discover_bluetooth(),
+            baudrate=config.BT_BAUDRATE,
+            profile=PROFILE,
+            # Virtual BT SPP ports never assert DSR, so the default dsrdtr=True
+            # hardware handshake makes every write block forever (the "freeze").
+            dsrdtr=False,
+            xonxoff=False,
+        )
     )
+
+
+def _connect_auto():
+    """USB-preferred with a bluetooth fallback.
+
+    A USB handle opening is NOT proof a printer is wired up: libusb can hand back
+    a device that then fails on write, or match an unrelated device on the same
+    chipset VID/PID. Accept USB only if it takes a real write (ESC @, bounded by
+    USB_TIMEOUT_MS); otherwise fall through to the paired bluetooth port. Without
+    this, `auto` latches onto a dead USB handle and never reaches bluetooth.
+    """
+    try:
+        printer = _connect_usb()
+    except Exception as error:
+        log.info("auto: usb unavailable (%s) — trying bluetooth", error)
+        return _connect_bluetooth()
+    try:
+        printer._raw(b"\x1b\x40")  # ESC @ init — must actually reach the device
+        return printer
+    except Exception as error:
+        log.info("auto: usb opened but not printing (%s) — trying bluetooth", error)
+        try:
+            printer.close()
+        except Exception:
+            pass
+        return _connect_bluetooth()
 
 
 def _connect():
     if config.BACKEND == "auto":
-        try:
-            return _connect_usb()
-        except Exception:
-            return _connect_bluetooth()
+        return _connect_auto()
     if config.BACKEND == "usb":
         return _connect_usb()
     if config.BACKEND == "bluetooth":
         return _connect_bluetooth()
     if config.BACKEND == "serial":
-        return Serial(
-            devfile=config.SERIAL_DEVICE,
-            baudrate=config.SERIAL_BAUDRATE,
-            profile=PROFILE,
-            dsrdtr=False,
-            xonxoff=False,
+        return _with_write_timeout(
+            Serial(
+                devfile=config.SERIAL_DEVICE,
+                baudrate=config.SERIAL_BAUDRATE,
+                profile=PROFILE,
+                dsrdtr=False,
+                xonxoff=False,
+            )
         )
     if config.BACKEND == "file":
         return File(config.FILE_DEVICE, profile=PROFILE)

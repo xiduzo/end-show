@@ -42,9 +42,9 @@ def _print_job(payload: dict) -> None:
 
 def _probe_printer() -> bool:
     # Startup-only write probe: opening a virtual BT SPP node is not proof it
-    # prints, so write an ESC @ (init) and rely on write_timeout to surface a
-    # dead link. NOT used by /health — a blocking write under _lock on every
-    # poll would starve /print.
+    # prints, so write an ESC @ (init) and let a failed write surface a dead
+    # link. NOT used by /health — a blocking write under _lock on every poll
+    # would starve /print.
     try:
         with device.session() as printer:
             printer._raw(b"\x1b\x40")

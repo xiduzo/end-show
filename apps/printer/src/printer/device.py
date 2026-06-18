@@ -102,26 +102,15 @@ def _connect_usb():
     )
 
 
-def _with_write_timeout(printer):
-    """escpos.Serial.open() does not forward write_timeout to pyserial, so a
-    stalled SPP link blocks forever. Accessing .device force-opens the port;
-    set the timeout on the live pyserial object so a non-draining write raises
-    SerialTimeoutException (-> 503) instead of hanging the request."""
-    printer.device.write_timeout = config.WRITE_TIMEOUT_S
-    return printer
-
-
 def _connect_bluetooth():
-    return _with_write_timeout(
-        Serial(
-            devfile=discover_bluetooth(),
-            baudrate=config.BT_BAUDRATE,
-            profile=PROFILE,
-            # Virtual BT SPP ports never assert DSR, so the default dsrdtr=True
-            # hardware handshake makes every write block forever (the "freeze").
-            dsrdtr=False,
-            xonxoff=False,
-        )
+    return Serial(
+        devfile=discover_bluetooth(),
+        baudrate=config.BT_BAUDRATE,
+        profile=PROFILE,
+        # Virtual BT SPP ports never assert DSR, so the default dsrdtr=True
+        # hardware handshake makes every write block forever (the "freeze").
+        dsrdtr=False,
+        xonxoff=False,
     )
 
 
@@ -136,14 +125,12 @@ def _connect():
     if config.BACKEND == "bluetooth":
         return _connect_bluetooth()
     if config.BACKEND == "serial":
-        return _with_write_timeout(
-            Serial(
-                devfile=config.SERIAL_DEVICE,
-                baudrate=config.SERIAL_BAUDRATE,
-                profile=PROFILE,
-                dsrdtr=False,
-                xonxoff=False,
-            )
+        return Serial(
+            devfile=config.SERIAL_DEVICE,
+            baudrate=config.SERIAL_BAUDRATE,
+            profile=PROFILE,
+            dsrdtr=False,
+            xonxoff=False,
         )
     if config.BACKEND == "file":
         return File(config.FILE_DEVICE, profile=PROFILE)

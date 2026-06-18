@@ -54,7 +54,12 @@ async def health():
     # printer=True only when we can actually open the device, so the
     # companion UI hides its print button when nothing is attached
     printer = await run_in_threadpool(_probe_printer)
-    return {"ok": True, "printer": printer, "backend": config.BACKEND}
+    return {
+        "ok": True,
+        "printer": printer,
+        "backend": config.BACKEND,
+        "serial_ports": device.list_serial_ports(),
+    }
 
 
 @app.post("/print")
@@ -102,6 +107,17 @@ def run():
         config.BT_DEVICE or "(auto-discover)",
         config.BT_HINT or "(none)",
     )
+    # Always list the serial ports present, independent of backend/pin, so the
+    # log shows what is actually connected even before any print is attempted.
+    ports = device.list_serial_ports()
+    if ports:
+        log.info("serial ports present (%d): %s", len(ports), ", ".join(ports))
+    else:
+        log.warning(
+            "no /dev/cu.* or /dev/rfcomm* ports present at all — nothing is "
+            "connected; power on and connect the printer (its node only exists "
+            "while connected)"
+        )
     # Probe once at boot so the log shows immediately whether the printer is
     # reachable, instead of only finding out on the first /print (a 503).
     if _probe_printer():

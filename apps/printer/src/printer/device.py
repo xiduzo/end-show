@@ -21,6 +21,12 @@ _BT_EXCLUDE = ("bluetooth-incoming-port", "debug-console", "wlan")
 _BT_EXCLUDE_PREFIXES = ("cu.usbserial", "cu.usbmodem")
 
 
+def list_serial_ports() -> list[str]:
+    """All serial ports currently present (bluetooth nodes appear here only
+    while the device is connected). Used for startup logs and /health."""
+    return sorted(glob.glob("/dev/cu.*") + glob.glob("/dev/rfcomm*"))
+
+
 def discover_bluetooth() -> str:
     """Find the serial port of a paired bluetooth printer.
 

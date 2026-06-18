@@ -123,19 +123,23 @@ def run():
             "connected; power on and connect the printer (its node only exists "
             "while connected)"
         )
-    # Probe once at boot so the log shows immediately whether the printer is
-    # reachable, instead of only finding out on the first /print (a 503).
-    if _probe_printer():
+    # Show at boot whether the printer is reachable, instead of only finding out
+    # on the first /print (a 503). When the test page is enabled it IS the probe
+    # — printing it proves the link — so open the printer once, not twice:
+    # opening a virtual BT SPP port churns the link and can drop the connection.
+    if config.TEST_ON_START:
+        try:
+            with device.session() as printer:
+                receipt.print_test_page(printer)
+            log.info("startup test page printed ✓ — printer reachable")
+        except Exception as error:
+            log.warning(
+                "startup test page failed — printer NOT reachable (%s); /print "
+                "will 503 until the printer is connected (see scan above)",
+                error,
+            )
+    elif _probe_printer():
         log.info("startup probe: printer reachable ✓")
-        # Physical confirmation the printer actually prints — independent of
-        # the browser/relay/HTTP path, which is the usual point of failure.
-        if config.TEST_ON_START:
-            try:
-                with device.session() as printer:
-                    receipt.print_test_page(printer)
-                log.info("startup test page sent ✓")
-            except Exception as error:
-                log.warning("startup test page failed: %s", error)
     else:
         log.warning(
             "startup probe: printer NOT reachable — /print will 503 until the "

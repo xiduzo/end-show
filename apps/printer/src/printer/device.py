@@ -200,7 +200,16 @@ class _Session:
             raise
         return self.printer
 
-    def __exit__(self, *exc):
+    def __exit__(self, exc_type, exc, tb):
+        # On error the write timed out mid-job, so the OS still holds a large
+        # undrained backlog; escpos.close() -> flush() -> termios.tcdrain() would
+        # then block forever on the stalled link and freeze the server. The job
+        # already failed, so drop the backlog to let close() return immediately.
+        if exc_type is not None:
+            try:
+                self.printer.device.reset_output_buffer()
+            except Exception:
+                pass
         try:
             self.printer.close()
         except Exception:

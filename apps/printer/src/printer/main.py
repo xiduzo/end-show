@@ -4,12 +4,16 @@ The companion/stage web app POSTs student content here; this service renders
 it as a receipt on the attached NT-1809DD thermal printer.
 """
 
+import logging
+
 from fastapi import FastAPI, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from . import config, device, receipt
+
+log = logging.getLogger("printer")
 
 app = FastAPI(title="end-show printer")
 
@@ -40,7 +44,8 @@ def _probe_printer() -> bool:
     try:
         with device.session():
             return True
-    except Exception:
+    except Exception as error:
+        log.info("printer probe failed: %s", error)
         return False
 
 
@@ -57,7 +62,9 @@ async def print_student(request: PrintRequest):
     try:
         await run_in_threadpool(_print_job, request.model_dump())
     except Exception as error:
+        log.warning("print failed for %s: %s", request.displayName, error)
         raise HTTPException(status_code=503, detail=f"printer error: {error}")
+    log.info("printed receipt for %s", request.displayName)
     return {"printed": request.displayName}
 
 
@@ -76,6 +83,34 @@ async def print_test():
 
 def run():
     import uvicorn
+
+    # force=True: some imported libs install a logging handler first, which
+    # would make a plain basicConfig() a no-op and swallow our INFO diagnostics.
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        force=True,
+    )
+    logging.getLogger("printer").setLevel(logging.INFO)
+
+    log.info(
+        "starting end-show printer: backend=%s host=%s port=%s "
+        "bt_device=%r bt_hint=%r",
+        config.BACKEND,
+        config.HOST,
+        config.PORT,
+        config.BT_DEVICE or "(auto-discover)",
+        config.BT_HINT or "(none)",
+    )
+    # Probe once at boot so the log shows immediately whether the printer is
+    # reachable, instead of only finding out on the first /print (a 503).
+    if _probe_printer():
+        log.info("startup probe: printer reachable ✓")
+    else:
+        log.warning(
+            "startup probe: printer NOT reachable — /print will 503 until the "
+            "printer is powered on and connected (see discovery scan above)"
+        )
 
     # reload needs an import string instead of the app object
     uvicorn.run(

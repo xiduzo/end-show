@@ -36,6 +36,10 @@ BT_BAUDRATE = int(os.environ.get("PRINTER_BT_BAUDRATE", "9600"))
 # (no DSR, link asleep) hangs the request forever instead of 503-ing.
 WRITE_TIMEOUT_S = int(os.environ.get("PRINTER_WRITE_TIMEOUT_S", "8"))
 
+# Print a test receipt once at startup so the operator gets physical
+# confirmation the printer works, without touching the HTTP/relay path.
+TEST_ON_START = os.environ.get("PRINTER_TEST_ON_START", "1") == "1"
+
 # For BACKEND=file (Linux usblp driver)
 FILE_DEVICE = os.environ.get("PRINTER_FILE_DEVICE", "/dev/usb/lp0")
 

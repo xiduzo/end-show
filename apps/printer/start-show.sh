@@ -15,13 +15,14 @@ REPO="${HERE:h:h}"         # up two levels: apps/printer -> repo
 URL="https://show.xiduzo.com/"
 UV="$(command -v uv)"
 
-# Bluetooth-paired printer (pair it once in System Settings → Bluetooth first).
-# macOS names the SPP node after the printer's advertised BT name, which for
-# the NT-1809DD is the generic "BlueToothPrinter" -> /dev/cu.BlueToothPrinter.
-# Pin the port if auto-discovery picks the wrong one:
-#   export PRINTER_BT_DEVICE="/dev/cu.BlueToothPrinter"
-export PRINTER_BACKEND="${PRINTER_BACKEND:-bluetooth}"
-export PRINTER_BT_HINT="${PRINTER_BT_HINT:-printer}"
+# Printer connection is configured in apps/printer/.env (see .env.example) so
+# it can change without editing this script. Do NOT export PRINTER_* here:
+# exported vars override .env (config.py loads .env only to fill gaps), which
+# would make the file impossible to override. Pick the backend in .env:
+#   USB / usb-serial cable (most reliable):  PRINTER_BACKEND=serial
+#                                            PRINTER_SERIAL_DEVICE=/dev/cu.usbserial-XXXX
+#   Bluetooth SPP:                           PRINTER_BACKEND=bluetooth
+#                                            PRINTER_BT_HINT=printer
 
 # a) open the Stage page in the default browser (returns immediately)
 open "$URL"

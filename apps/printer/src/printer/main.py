@@ -127,6 +127,15 @@ def run():
     # reachable, instead of only finding out on the first /print (a 503).
     if _probe_printer():
         log.info("startup probe: printer reachable ✓")
+        # Physical confirmation the printer actually prints — independent of
+        # the browser/relay/HTTP path, which is the usual point of failure.
+        if config.TEST_ON_START:
+            try:
+                with device.session() as printer:
+                    receipt.print_test_page(printer)
+                log.info("startup test page sent ✓")
+            except Exception as error:
+                log.warning("startup test page failed: %s", error)
     else:
         log.warning(
             "startup probe: printer NOT reachable — /print will 503 until the "

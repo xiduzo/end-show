@@ -15,6 +15,7 @@ export function FindMeChip({
   onToggleComp,
   onClear,
   resultCount,
+  totalCount,
   showcasedId,
 }: {
   search: string;
@@ -24,10 +25,15 @@ export function FindMeChip({
   onToggleComp: (c: string) => void;
   onClear: () => void;
   resultCount: number;
+  totalCount: number;
   showcasedId: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const activeCount = (search ? 1 : 0) + selected.length;
+  // Idle wall cycles only a subset (ADR-0011 hideWhenIdle), but the count
+  // should reflect every searchable Student. Show the true total when not
+  // filtering; show live matches while filtering.
+  const displayCount = activeCount > 0 ? resultCount : totalCount;
   const rootRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
 
@@ -102,7 +108,7 @@ export function FindMeChip({
             layout
             className="bg-lego-dark text-slide flex h-[52px] w-[52px] items-center justify-center rounded-full font-display text-xl font-bold tabular-nums"
           >
-            <NumberTicker value={resultCount} />
+            <NumberTicker value={displayCount} />
           </motion.div>
           <motion.div
             layout="position"
@@ -199,7 +205,7 @@ export function FindMeChip({
               </>
             )}
             <div className="mt-5 flex items-center justify-between font-mono text-xs tracking-widest uppercase">
-              <span className="text-lego/55">{resultCount} match</span>
+              <span className="text-lego/55">{displayCount} match</span>
               <button
                 type="button"
                 onClick={() => {

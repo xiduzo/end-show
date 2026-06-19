@@ -180,6 +180,7 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
           setWallShuffleSeed(Math.floor(Math.random() * 0x7fffffff));
         }}
         resultCount={filtered.length}
+        totalCount={list.length}
         showcasedId={showcasedId}
       />
 

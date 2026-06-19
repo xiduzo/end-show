@@ -24,7 +24,13 @@ import { WallShowcase } from "./wall-showcase";
 export function CompanionView({ tier }: { tier: CompanionTier }) {
   const { stageCode, setStageCode, clear: clearStageCode } = useStageCode();
   useStudentUpdates();
-  const students = useQuery(trpc.student.listEligible.queryOptions());
+  const students = useQuery({
+    ...trpc.student.listEligible.queryOptions(),
+    // Re-rank stage-time fairness (ADR-0011) on a cadence: stage activity
+    // doesn't emit a student update, so without this the idle-hidden Student
+    // would stay parked off the wall for the life of the page load.
+    refetchInterval: 60_000,
+  });
   const push = useMutation(trpc.queue.push.mutationOptions());
   const [queue, setQueue] = useState<QueueSnap | null>(null);
   const [stage, setStage] = useState<StageSnap | null>(null);

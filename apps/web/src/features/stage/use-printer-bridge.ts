@@ -17,19 +17,37 @@ export function usePrinterBridge(stageCode: string | null) {
   useEffect(() => {
     let disposed = false;
 
+    let lastReported: boolean | null = null;
     const report = (available: boolean) => {
+      if (available === lastReported) return; // only emit on change
+      lastReported = available;
       trpcClient.printer.report
         .mutate({ stageCode, available })
         .catch((err) => console.error("printer.report error", err));
     };
 
+    // Hysteresis: flip to available the instant a poll succeeds, but only flip
+    // to unavailable after several consecutive misses. A single slow/dropped
+    // /health poll (common while a long print holds the BLE link) would
+    // otherwise unmount the companion's print button and make it flicker.
+    const MISSES_BEFORE_UNAVAILABLE = 3;
+    let misses = 0;
+
     const checkHealth = async () => {
+      let ok = false;
       try {
         const res = await fetch(`${PRINTER_URL}/health`);
         const data = res.ok ? await res.json() : null;
-        if (!disposed) report(data?.printer === true);
+        ok = data?.printer === true;
       } catch {
-        if (!disposed) report(false);
+        ok = false;
+      }
+      if (disposed) return;
+      if (ok) {
+        misses = 0;
+        report(true);
+      } else if (++misses >= MISSES_BEFORE_UNAVAILABLE) {
+        report(false);
       }
     };
 

@@ -13,6 +13,7 @@ per job mirrors the serial backend: resilient to the printer cycling power.
 
 import asyncio
 import logging
+import time
 
 from bleak import BleakClient, BleakScanner
 
@@ -106,14 +107,20 @@ async def send(data: bytes) -> None:
         device = await _resolve_device()
         async with BleakClient(device, timeout=config.BLE_CONNECT_TIMEOUT_S) as client:
             char = _pick_write_char(client)
-            # write-without-response is faster and what most of these printers
-            # want; only fall back to acked writes if WWR isn't offered. Either
-            # way pace the chunks: blasting overruns the printer's small buffer.
-            props = getattr(char, "properties", ["write-without-response"])
-            no_response = "write-without-response" in props
+            # Acked writes (response=True) are the reliable default: each chunk is
+            # confirmed before the next, so none is silently dropped. That matters
+            # for raster — the bytes are one continuous row-major stream, so a
+            # single lost chunk shifts everything after it and smears the whole
+            # image. write-without-response is faster but unacked/unflow-controlled;
+            # use it only when the unit offers nothing else, or when forced.
+            props = getattr(char, "properties", ["write"])
+            can_ack = "write" in props
+            no_response = config.BLE_FORCE_WWR or not can_ack
             mtu = getattr(client, "mtu_size", 23) or 23
             chunk = config.BLE_CHUNK or max(20, mtu - 3)
-            delay = config.BLE_CHUNK_DELAY_MS / 1000
+            # Acked writes self-pace (bleak awaits each ack), so the inter-chunk
+            # sleep is only needed to protect the buffer on unacked WWR streams.
+            delay = config.BLE_CHUNK_DELAY_MS / 1000 if no_response else 0
             log.info(
                 "ble: sending %d bytes to %s in %d-byte chunks (response=%s)",
                 len(data),
@@ -121,6 +128,7 @@ async def send(data: bytes) -> None:
                 chunk,
                 not no_response,
             )
+            start = time.monotonic()
             for i in range(0, len(data), chunk):
                 await client.write_gatt_char(char, data[i : i + chunk], response=not no_response)
                 if delay:
@@ -128,8 +136,21 @@ async def send(data: bytes) -> None:
             # Drain before the context manager disconnects: a write-without-response
             # chunk is only queued, not delivered, when write_gatt_char returns. The
             # last (or only) packet of a small job is otherwise dropped on disconnect.
+            # Acked writes are already delivered on return, so no drain is needed.
             if no_response and config.BLE_FLUSH_DELAY_MS:
                 await asyncio.sleep(config.BLE_FLUSH_DELAY_MS / 1000)
+            # Wait out the physical print: acked writes return once the printer has
+            # BUFFERED the bytes, not once it has PRINTED them, so without this the
+            # job reports done while paper is still feeding (button re-enables too
+            # early). Hold until the estimated print time has elapsed; acked ACKs
+            # already eat most of it, so this usually just covers the residual
+            # buffer + final feed.
+            if config.BLE_DRAIN_BPS > 0:
+                expected = len(data) / config.BLE_DRAIN_BPS
+                remaining = expected - (time.monotonic() - start)
+                if remaining > 0:
+                    log.info("ble: waiting %.1fs for the printer to finish", remaining)
+                    await asyncio.sleep(remaining)
 
 
 async def probe() -> bool:

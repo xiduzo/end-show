@@ -47,11 +47,25 @@ BLE_CONNECT_TIMEOUT_S = float(os.environ.get("PRINTER_BLE_CONNECT_TIMEOUT_S", "2
 # between chunks keeps the printer's tiny receive buffer from overrunning.
 BLE_CHUNK = int(os.environ.get("PRINTER_BLE_CHUNK", "0"))
 BLE_CHUNK_DELAY_MS = int(os.environ.get("PRINTER_BLE_CHUNK_DELAY_MS", "20"))
+# Write-without-response (WWR) is faster but has no ack and no flow control: under
+# a long raster a single dropped/lost chunk shifts every byte after it, smearing
+# the whole bitmap ("image prints weird"). Acked writes (response=True) guarantee
+# delivery and self-pace (bleak awaits each ack), so they print a clean image at
+# the cost of speed. Default to acked when the characteristic offers plain "write";
+# set PRINTER_BLE_FORCE_WWR=1 only if a unit accepts WWR exclusively.
+BLE_FORCE_WWR = os.environ.get("PRINTER_BLE_FORCE_WWR", "0") == "1"
 # write-without-response returns once a chunk is queued, not delivered. Disconnect
 # fires when the job's `with` block exits, so without a drain the last (or only)
 # packet is dropped before it transmits — small jobs print nothing. Hold the link
 # open briefly after the final write so the radio flushes.
 BLE_FLUSH_DELAY_MS = int(os.environ.get("PRINTER_BLE_FLUSH_DELAY_MS", "500"))
+# Acked writes return once the printer has BUFFERED the bytes, not once it has
+# PRINTED them — so send() (and thus /print, and the companion's "printing…"
+# state) would report done while paper is still feeding. Hold the call open for
+# the estimated physical print time: bytes / this rate. Lower = waits longer
+# (safer: button stays disabled until the receipt is really out). 0 disables.
+# Tune to the unit's real throughput; ESC 7 head-slowing lowers it.
+BLE_DRAIN_BPS = int(os.environ.get("PRINTER_BLE_DRAIN_BPS", "3500"))
 
 # Write timeouts. netum sets this as pyserial's write_timeout; escpos.Usb
 # defaults to 0 (= block forever). Without an explicit write timeout a stalled
@@ -84,6 +98,14 @@ IMAGE_IMPL = os.environ.get("PRINTER_IMAGE_IMPL", "bitImageRaster")
 # netum backend: raster bytes are written in chunks of this many bytes (paced
 # by IMAGE_STRIP_DELAY_S) so the printer's small buffer doesn't overrun.
 NETUM_CHUNK = int(os.environ.get("PRINTER_NETUM_CHUNK", "1024"))
+
+# Print-head timing. This clone's ESC 7 takes a SINGLE parameter, max heating
+# dots ((n+1)*8): fewer dots heat the line in smaller groups, slowing the paper
+# so a slow BLE feed never underruns — that underrun is what prints the faint
+# "scanlines". Lower HEAT_MAX_DOTS = slower/cleaner (but can lighten/streak);
+# raise it if the print is too slow or faint. Ignored by firmware without ESC 7.
+HEAT_TUNE = os.environ.get("PRINTER_HEAT_TUNE", "0") == "1"
+HEAT_MAX_DOTS = int(os.environ.get("PRINTER_HEAT_MAX_DOTS", "7"))
 
 HOST = os.environ.get("PRINTER_HTTP_HOST", "0.0.0.0")
 PORT = int(os.environ.get("PRINTER_HTTP_PORT", "8765"))

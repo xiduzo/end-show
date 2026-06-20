@@ -40,7 +40,11 @@ type PendingJob = {
   timer: ReturnType<typeof setTimeout>;
 };
 const pending = new Map<string, PendingJob>();
-const JOB_TIMEOUT_MS = 60_000;
+// A raster receipt over BLE with a deliberately slowed print head can take well
+// over a minute end to end (the printer ACKs only as its buffer drains, plus a
+// drain wait so completion tracks the physical print). Keep this comfortably
+// above the worst-case print so the job isn't force-resolved while still printing.
+const JOB_TIMEOUT_MS = 180_000;
 
 function keyFor(stageCode: string | null): string {
   return stageCode ?? "";

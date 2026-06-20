@@ -12,8 +12,9 @@ from io import BytesIO
 from pathlib import Path
 
 import httpx
+import numpy as np
 import qrcode
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from . import config
 
@@ -47,12 +48,53 @@ def _fetch_portrait(url: str) -> Image.Image | None:
         return None
 
 
+def _atkinson_dither(image: Image.Image) -> Image.Image:
+    """1-bit Atkinson dithering, returned as an L image of pure 0/255 pixels.
+
+    Atkinson (the original Mac/HyperCard dither) diffuses only 6/8 of each
+    pixel's quantisation error to its neighbours, deliberately dropping the
+    other 2/8. On a 1-bit thermal head that keeps highlights clean and edges
+    crisp where Floyd-Steinberg (PIL's convert("1") default) smears a face into
+    muddy grey noise. Kept on the portrait only; text/QR are thresholded.
+    """
+    arr = np.asarray(image.convert("L"), dtype=np.float32).copy()
+    h, w = arr.shape
+    for y in range(h):
+        row = arr[y]
+        below = arr[y + 1] if y + 1 < h else None
+        below2 = arr[y + 2] if y + 2 < h else None
+        for x in range(w):
+            old = row[x]
+            new = 255.0 if old >= 128 else 0.0
+            row[x] = new
+            err = (old - new) / 8.0
+            if x + 1 < w:
+                row[x + 1] += err
+            if x + 2 < w:
+                row[x + 2] += err
+            if below is not None:
+                if x - 1 >= 0:
+                    below[x - 1] += err
+                below[x] += err
+                if x + 1 < w:
+                    below[x + 1] += err
+            if below2 is not None:
+                below2[x] += err
+    return Image.fromarray(arr.clip(0, 255).astype(np.uint8), "L")
+
+
 def _prepare_portrait(image: Image.Image) -> Image.Image:
     image = ImageOps.exif_transpose(image)
     image = image.convert("L")
     height = round(image.height * WIDTH / image.width)
-    image = image.resize((WIDTH, height))
-    return ImageOps.autocontrast(image)
+    image = image.resize((WIDTH, height), Image.LANCZOS)
+    # stretch the tonal range, then a gamma < 1 lifts the midtones: a thermal
+    # head prints heavy, so without this faces clog to a black blob.
+    image = ImageOps.autocontrast(image, cutoff=2)
+    image = image.point(lambda p: round(255 * (p / 255) ** 0.8))
+    # recover edge detail lost to the downscale before it's crushed to 1-bit
+    image = image.filter(ImageFilter.UnsharpMask(radius=1.5, percent=120, threshold=2))
+    return _atkinson_dither(image)
 
 
 def _wrap(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> list[str]:
@@ -130,7 +172,10 @@ class _Canvas:
         draw.line([(MARGIN, top + 4), (WIDTH - MARGIN, top + 4)], fill=0, width=2)
 
     def to_print(self) -> Image.Image:
-        return self.image.convert("1")  # Floyd-Steinberg dither
+        # The portrait is already Atkinson-dithered to pure black/white, so a
+        # hard threshold here keeps text and the QR crisp instead of letting
+        # convert("1") re-dither (and smear) them.
+        return self.image.point(lambda p: 255 if p >= 128 else 0).convert("1")
 
 
 def _render_student(student: dict) -> Image.Image:
@@ -213,6 +258,15 @@ def _send_image(printer, image: Image.Image) -> None:
     print with visible seams / misalignment ("prints weird"). So emit a single
     raster command when rendering to bytes.
     """
+    # ESC @ first: initialise the printer and clear any prior parser state.
+    printer._raw(b"\x1b\x40")
+    # Slow the head so a slow BLE feed keeps the buffer full — underrun is what
+    # prints the faint scanlines. This firmware's ESC 7 takes a SINGLE parameter
+    # (max heating dots); the 3-param Adafruit form leaked its other two bytes as
+    # a printed "x(". Fewer dots = the line heats in smaller groups = slower
+    # paper = feed keeps up.
+    if config.HEAT_TUNE:
+        printer._raw(bytes([0x1B, 0x37, config.HEAT_MAX_DOTS & 0xFF]))
     if type(printer).__name__ == "Dummy":
         printer.image(image, impl=config.IMAGE_IMPL, fragment_height=image.height)
         return

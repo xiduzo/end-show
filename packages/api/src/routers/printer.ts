@@ -5,6 +5,7 @@ import { publicProcedure, router } from "../index";
 import {
   type PrinterSnapshot,
   type PrintJob,
+  completePrintJob,
   reportPrinter,
   submitPrintJob,
   subscribePrinterAvailability,
@@ -49,11 +50,19 @@ export const printerRouter = router({
         );
       }),
     ),
-  // Companion → server: print request, relayed to the Stage.
+  // Companion → server: print request, relayed to the Stage. Resolves only once
+  // the Stage reports the receipt printed (or failed), so the companion keeps
+  // showing "printing…" until it physically completes.
   print: publicProcedure
     .input(printJobSchema.extend({ stageCode: stageCodeSchema }))
-    .mutation(({ input }) => {
+    .mutation(async ({ input }) => {
       const { stageCode, ...job } = input;
-      return { ok: submitPrintJob(stageCode, job) };
+      return { ok: await submitPrintJob(stageCode, job) };
+    }),
+  // Stage → server: a forwarded job finished printing (or failed).
+  complete: publicProcedure
+    .input(z.object({ jobId: z.string(), ok: z.boolean() }))
+    .mutation(({ input }) => {
+      completePrintJob(input.jobId, input.ok);
     }),
 });

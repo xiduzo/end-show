@@ -40,12 +40,25 @@ export function usePrinterBridge(stageCode: string | null) {
       { stageCode },
       {
         onData: (data) => {
-          const job = data as PrintJob;
-          void fetch(`${PRINTER_URL}/print`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(job),
-          }).catch((err) => console.error("printer forward error", err));
+          const { jobId, ...job } = data as PrintJob;
+          // Forward to the local print service, then report the outcome back so
+          // the companion's "printing…" state clears only when it's really done.
+          void (async () => {
+            let ok = false;
+            try {
+              const res = await fetch(`${PRINTER_URL}/print`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(job),
+              });
+              ok = res.ok;
+            } catch (err) {
+              console.error("printer forward error", err);
+            }
+            trpcClient.printer.complete
+              .mutate({ jobId, ok })
+              .catch((err) => console.error("printer.complete error", err));
+          })();
         },
         onError: (err) => console.error("printer.jobs error", err),
       },

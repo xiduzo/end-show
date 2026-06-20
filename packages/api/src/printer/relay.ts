@@ -1,8 +1,12 @@
+import { randomUUID } from "node:crypto";
+
 // Printer relay — the companion (iPad) can't reach the local print service
 // on the printer host, so the Stage bridges: it reports printer availability
 // per stageCode and receives print jobs to forward to localhost.
 
 export type PrintJob = {
+  /** Correlates the forwarded job with its completion report. */
+  jobId: string;
   displayName: string;
   pronouns: string;
   track: string;
@@ -26,6 +30,17 @@ type PrinterChannel = {
 };
 
 const channels = new Map<string, PrinterChannel>();
+
+// Jobs awaiting a completion report from the Stage that forwarded them, so the
+// companion's print mutation stays pending (button shows "printing…") until the
+// receipt physically prints or fails. A timeout resolves false if the Stage
+// never reports back (disconnected mid-job, slow link).
+type PendingJob = {
+  resolve: (ok: boolean) => void;
+  timer: ReturnType<typeof setTimeout>;
+};
+const pending = new Map<string, PendingJob>();
+const JOB_TIMEOUT_MS = 60_000;
 
 function keyFor(stageCode: string | null): string {
   return stageCode ?? "";
@@ -96,12 +111,32 @@ export function subscribePrinterAvailability(
   };
 }
 
+// Resolves once the Stage reports the job done (true=printed, false=failed),
+// or false on timeout. The returned promise is what keeps the companion's
+// print mutation pending.
 export function submitPrintJob(
   stageCode: string | null,
-  job: PrintJob,
-): boolean {
+  job: Omit<PrintJob, "jobId">,
+): Promise<boolean> {
   const ch = getChannel(stageCode);
-  if (!snapshot(ch).available) return false;
-  for (const l of ch.jobListeners) l(job);
-  return true;
+  if (!snapshot(ch).available) return Promise.resolve(false);
+  const jobId = randomUUID();
+  const full: PrintJob = { ...job, jobId };
+  return new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => {
+      pending.delete(jobId);
+      resolve(false);
+    }, JOB_TIMEOUT_MS);
+    pending.set(jobId, { resolve, timer });
+    for (const l of ch.jobListeners) l(full);
+  });
+}
+
+// Stage → server: a forwarded job finished printing (or failed).
+export function completePrintJob(jobId: string, ok: boolean): void {
+  const p = pending.get(jobId);
+  if (!p) return;
+  clearTimeout(p.timer);
+  pending.delete(jobId);
+  p.resolve(ok);
 }

@@ -181,9 +181,14 @@ def _render_student(student: dict) -> Image.Image:
         canvas.space(6)
         canvas.paste(_qr_image(link))
         canvas.space(8)
-        # the QR carries the full URL; the printed label drops the scheme
-        # and steps the font down (like the name) to stay on one line
-        label = link.removeprefix("https://").removeprefix("http://").rstrip("/")
+        # the QR carries the full URL; the printed label drops the scheme and
+        # leading www. and steps the font down (like the name) to stay on one line
+        label = (
+            link.removeprefix("https://")
+            .removeprefix("http://")
+            .removeprefix("www.")
+            .rstrip("/")
+        )
         label_size = 16
         for size in range(16, 9, -1):
             label_size = size
@@ -198,7 +203,19 @@ def _render_student(student: dict) -> Image.Image:
 
 
 def _send_image(printer, image: Image.Image) -> None:
-    """Stream the bitmap in short strips so the printer's buffer keeps up."""
+    """Render the bitmap as raster data.
+
+    Live serial backends (usb) have a tiny receive buffer, so a tall image is
+    streamed as short strips with a pause between them to avoid overrun. The
+    byte-render path (Dummy -> BLE/netum) has no live buffer here: it is paced
+    downstream at the byte level (GATT chunking / NETUM_CHUNK). Splitting it
+    into strips there only stacks several raster commands, which these clones
+    print with visible seams / misalignment ("prints weird"). So emit a single
+    raster command when rendering to bytes.
+    """
+    if type(printer).__name__ == "Dummy":
+        printer.image(image, impl=config.IMAGE_IMPL, fragment_height=image.height)
+        return
     strip = config.IMAGE_STRIP_HEIGHT
     for top in range(0, image.height, strip):
         printer.image(

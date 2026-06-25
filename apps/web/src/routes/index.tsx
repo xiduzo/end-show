@@ -348,10 +348,13 @@ function ConfirmGenerate({
   };
 
   const toggleTrack = (t: string) => {
-    const set = new Set(tracks ?? []);
+    // `null` means "all tracks", so seed from the full list — tapping a chip
+    // that's currently on then removes just that one (true multi-select),
+    // instead of isolating it. Collapse back to null once everything is on.
+    const set = new Set(tracks ?? availableTracks);
     if (set.has(t)) set.delete(t);
     else set.add(t);
-    onSetTracks(set.size > 0 ? Array.from(set) : null);
+    onSetTracks(set.size === availableTracks.length ? null : Array.from(set));
   };
 
   useEffect(() => {

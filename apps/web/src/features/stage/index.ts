@@ -19,6 +19,7 @@ export {
 } from "./stage-palette";
 export {
   isValidStageCode,
+  sanitizeStageCodeInput,
   useStageCode,
 } from "./stage-code-store";
 export { usePrinterBridge } from "./use-printer-bridge";

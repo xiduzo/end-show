@@ -1,0 +1,83 @@
+# ─────────────────────────────────────────────────────────────
+# end-show — example Docker Compose stack
+#
+# This is the easiest way to run the whole platform on one machine and have the
+# pieces find each other automatically. To use it:
+#
+#   1. cp docker-compose.example.yml docker-compose.yml
+#   2. Edit the values marked CHANGE-ME below.
+#   3. docker compose up -d --build
+#
+# Full step-by-step explanation: docs/DEPLOYMENT.md
+# ─────────────────────────────────────────────────────────────
+
+services:
+  # ── Database ────────────────────────────────────────────────
+  # A self-hosted libsql (sqld) database. If you use Turso or another database
+  # instead, delete this whole service and point DATABASE_URL (below) at it.
+  db:
+    # Pin a specific version for production instead of :latest.
+    image: ghcr.io/tursodatabase/libsql-server:latest
+    environment:
+      # Protects the database's HTTP API. Format is  basic:<base64 of user:password>
+      # Generate the value for "admin:CHANGE-ME-DB-PASSWORD" with:
+      #     printf 'admin:CHANGE-ME-DB-PASSWORD' | base64
+      SQLD_HTTP_AUTH: "basic:YWRtaW46Q0hBTkdFLU1FLURCLVBBU1NXT1JE"
+    volumes:
+      - db-data:/var/lib/sqld
+    restart: unless-stopped
+
+  # ── API server (Hono + tRPC + WebSocket) ────────────────────
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    environment:
+      # Same user:password you base64'd into SQLD_HTTP_AUTH above. "db" is this
+      # compose service name — Docker resolves it to the database container.
+      DATABASE_URL: "http://admin:CHANGE-ME-DB-PASSWORD@db:8080"
+
+      # 32+ random characters. Generate with:  openssl rand -base64 32
+      BETTER_AUTH_SECRET: "CHANGE-ME-to-a-32-plus-character-random-string"
+
+      # Public URLs (what a browser types). No trailing slash.
+      BETTER_AUTH_URL: "https://api.your-domain.example"     # this server
+      CORS_ORIGIN: "https://your-domain.example"             # the web app
+
+      NODE_ENV: "production"
+      ROOT_STAFF_EMAIL: "you@your-domain.example"            # your first login
+      ROOT_STAFF_NAME: "Your Name"
+
+      # ── Optional: Cloudflare R2 (portrait / work uploads) ──
+      # R2_ACCOUNT_ID: ""
+      # R2_BUCKET: ""
+      # R2_ACCESS_KEY_ID: ""
+      # R2_SECRET_ACCESS_KEY: ""
+      # R2_PUBLIC_URL: "https://assets.your-domain.example"
+
+      # ── Optional: Resend (sends the 6-digit login codes) ──
+      # RESEND_API_KEY: ""
+      # RESEND_FROM: "Graduation Show <onboarding@resend.dev>"
+    depends_on:
+      - db
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  # ── Web app (Stage + Companion + admin, served as static files) ──
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        # BAKED IN AT BUILD TIME. Must be the server's PUBLIC url (the same
+        # value as BETTER_AUTH_URL above). Change this and you must rebuild.
+        VITE_SERVER_URL: "https://api.your-domain.example"
+    depends_on:
+      - server
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  db-data:

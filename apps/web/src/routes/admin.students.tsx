@@ -24,7 +24,7 @@ type StudentRow = {
   displayName: string;
   pronouns: string;
   link: string;
-  track: "IxD" | "DFT";
+  track: string;
   competencies: string[];
   workMediaKind: "work-image" | "work-video" | null;
   workMediaUrl: string | null;
@@ -41,7 +41,7 @@ type Filter = "all" | "complete" | "incomplete" | "over-budget" | "flagged";
 type BulkRow = {
   name: string;
   email: string;
-  track: "IxD" | "DFT";
+  track: string;
   error?: string;
 };
 
@@ -199,9 +199,9 @@ function parseBulkRows(grid: string[][]): BulkRow[] {
   return rows.slice(start).map((r) => {
     const name = (r[nameIdx] ?? "").trim();
     const email = (r[emailIdx] ?? "").trim().toLowerCase();
-    const rawTrack =
-      trackIdx >= 0 ? (r[trackIdx] ?? "").trim().toUpperCase() : "";
-    const track: "IxD" | "DFT" = rawTrack === "DFT" ? "DFT" : "IxD";
+    const rawTrack = trackIdx >= 0 ? (r[trackIdx] ?? "").trim() : "";
+    // Free-form track; default to IxD when the column is blank.
+    const track = rawTrack || "IxD";
     let error: string | undefined;
     if (!name) error = "missing name";
     else if (name.length > 80) error = "name too long";
@@ -278,7 +278,7 @@ function AdminStudentsRoute() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteTrack, setInviteTrack] = useState<"IxD" | "DFT">("IxD");
+  const [inviteTrack, setInviteTrack] = useState<string>("IxD");
   const [bulkRows, setBulkRows] = useState<BulkRow[] | null>(null);
   const [bulkResults, setBulkResults] = useState<BulkResult[] | null>(null);
   const bulkFileRef = useRef<HTMLInputElement>(null);
@@ -286,6 +286,9 @@ function AdminStudentsRoute() {
   const [flagReason, setFlagReason] = useState("");
 
   const rows: StudentRow[] = list.data ?? [];
+
+  const trackOptions = useQuery(trpc.admin.trackOptions.queryOptions());
+  const knownTracks = trackOptions.data ?? [];
 
   const counts = useMemo(() => {
     let total = 0;
@@ -463,7 +466,11 @@ function AdminStudentsRoute() {
     const email = inviteEmail.trim();
     if (!name || !email) return;
     try {
-      await createStudent.mutateAsync({ name, email, track: inviteTrack });
+      await createStudent.mutateAsync({
+        name,
+        email,
+        track: inviteTrack.trim() || "IxD",
+      });
       toast.success(`${name} added`);
       closeInvite();
     } catch (err) {
@@ -985,23 +992,23 @@ function AdminStudentsRoute() {
                 <label className="mt-4 block text-xs tracking-[0.2em] uppercase text-ink/60">
                   Track
                 </label>
-                <div className="mt-1 flex gap-2">
-                  {(["IxD", "DFT"] as const).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setInviteTrack(t)}
-                      className={
-                        "flex-1 h-10 rounded-md border font-display text-base font-bold tracking-wider transition " +
-                        (inviteTrack === t
-                          ? "border-ink bg-ink text-chalkboard"
-                          : "border-ink/20 bg-white text-ink/60 hover:text-ink")
-                      }
-                    >
-                      {t}
-                    </button>
+                <input
+                  type="text"
+                  list="invite-track-options"
+                  value={inviteTrack}
+                  onChange={(e) => setInviteTrack(e.target.value)}
+                  placeholder="IxD"
+                  maxLength={40}
+                  className="mt-1 h-10 w-full rounded-md border border-ink/20 bg-white px-3 text-sm focus:border-ink/50 focus:outline-none"
+                />
+                <datalist id="invite-track-options">
+                  {knownTracks.map((t) => (
+                    <option key={t} value={t} />
                   ))}
-                </div>
+                </datalist>
+                <p className="mt-1 text-[11px] text-ink/40">
+                  Pick an existing track or type a new one.
+                </p>
 
                 <div className="mt-5 border-t border-dashed border-ink/15 pt-4">
                   <input

@@ -82,6 +82,13 @@ BLE_DRAIN_BPS = int(os.environ.get("PRINTER_BLE_DRAIN_BPS", "3500"))
 SERIAL_WRITE_TIMEOUT_S = float(os.environ.get("PRINTER_WRITE_TIMEOUT_S", "25"))
 USB_TIMEOUT_MS = int(os.environ.get("PRINTER_USB_TIMEOUT_MS", "2000"))
 
+# When BACKEND=ble can't reach the printer (no device found / connect timeout /
+# write error), fall back to a wired USB print so a plugged-in cable keeps the
+# show running if the radio drops. The fallback re-renders through the live USB
+# strip-paced path (not the single-raster BLE byte stream) so the clone's small
+# buffer doesn't overrun. Set 0 to disable and let BLE failures surface as 503.
+FALLBACK_USB = os.environ.get("PRINTER_FALLBACK_USB", "1") == "1"
+
 # Print a test receipt once at startup so the operator gets physical
 # confirmation the printer works, without touching the HTTP/relay path.
 TEST_ON_START = os.environ.get("PRINTER_TEST_ON_START", "1") == "1"

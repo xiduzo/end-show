@@ -23,7 +23,7 @@ export function TrackStamp({
   size = "md",
   className,
 }: {
-  track: "IxD" | "DFT";
+  track: string;
   seed: string;
   size?: keyof typeof SIZES;
   className?: string;
@@ -31,6 +31,15 @@ export function TrackStamp({
   const { a, b } = pickPair(seed);
   const s = SIZES[size];
   const midColor = "#f3b9ff";
+  const label = track.trim() || "—";
+
+  // Generic three-zone rendering: first char (tone a), middle run (smaller,
+  // lowercase, pink), last char (tone b). Renders "IxD"/"DFT" exactly as
+  // before and degrades cleanly for any free-form track label.
+  const head = label[0]!;
+  const tail = label.length > 1 ? label[label.length - 1]! : "";
+  const mid = label.length > 2 ? label.slice(1, -1) : "";
+
   return (
     <span
       className={cn(
@@ -38,28 +47,18 @@ export function TrackStamp({
         s.wrap,
         className,
       )}
-      aria-label={`Track ${track}`}
+      aria-label={`Track ${label}`}
     >
-      {track === "IxD" ? (
-        <>
-          <span style={{ color: a }}>I</span>
-          <span
-            className={cn("mx-0.5 inline-block align-middle lowercase", s.mid)}
-            style={{ color: midColor }}
-          >
-            x
-          </span>
-          <span style={{ color: b }}>D</span>
-        </>
-      ) : (
-        <>
-          <span style={{ color: a }}>D</span>
-          <span className="mx-0.5" style={{ color: midColor }}>
-            F
-          </span>
-          <span style={{ color: b }}>T</span>
-        </>
+      <span style={{ color: a }}>{head}</span>
+      {mid && (
+        <span
+          className={cn("mx-0.5 inline-block align-middle lowercase", s.mid)}
+          style={{ color: midColor }}
+        >
+          {mid}
+        </span>
       )}
+      {tail && <span style={{ color: b }}>{tail}</span>}
     </span>
   );
 }

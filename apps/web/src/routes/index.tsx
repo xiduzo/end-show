@@ -15,7 +15,12 @@ import {
   UpNextBadge,
   resolveWorkMedia,
 } from "@/features/stage";
-import { usePrinterBridge, useStageCode } from "@/features/stage";
+import {
+  isValidStageCode,
+  sanitizeStageCodeInput,
+  usePrinterBridge,
+  useStageCode,
+} from "@/features/stage";
 import { trpc, trpcClient } from "@/lib/trpc";
 import { useStudentUpdates } from "@/lib/use-student-updates";
 import { useTapGesture } from "@/lib/use-tap-gesture";
@@ -23,6 +28,7 @@ import { cn } from "@end-show/ui/lib/utils";
 
 type StageSnap = {
   stageCode: string | null;
+  tracks: string[] | null;
   current: { studentUserId: string; startedAt: number; source: string } | null;
   dwellMs: number;
 };
@@ -36,7 +42,10 @@ type QueueSnap = {
   next: string | null;
 };
 
-const stageSearch = z.object({ code: z.string().optional() });
+const stageSearch = z.object({
+  code: z.string().optional(),
+  tracks: z.string().optional(),
+});
 
 export const Route = createFileRoute("/")({
   validateSearch: stageSearch,
@@ -54,7 +63,8 @@ export const Route = createFileRoute("/")({
 });
 
 function StageRoute() {
-  const { stageCode, generate, clear } = useStageCode();
+  const { stageCode, tracks, setStageCode, setTracks, generate, clear } =
+    useStageCode();
   const [snap, setSnap] = useState<StageSnap | null>(null);
   const [queue, setQueue] = useState<QueueSnap | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -67,16 +77,19 @@ function StageRoute() {
     onTrigger: () => setConfirmOpen(true),
   });
 
+  const tracksKey = tracks ? tracks.join(",") : "";
   useEffect(() => {
     const sub = trpcClient.stage.current.subscribe(
-      { stageCode },
+      // null (not undefined) tells the server "all tracks" and clears any
+      // stale filter on this Stage's channel.
+      { stageCode, tracks: tracksKey ? tracksKey.split(",") : null },
       {
         onData: (data) => setSnap(data as StageSnap),
         onError: (err) => console.error("stage.current error", err),
       },
     );
     return () => sub.unsubscribe();
-  }, [stageCode]);
+  }, [stageCode, tracksKey]);
 
   useEffect(() => {
     const sub = trpcClient.queue.watch.subscribe(
@@ -103,6 +116,14 @@ function StageRoute() {
     () => (queue?.items ?? []).slice(0, 3).map((i) => i.studentUserId),
     [queue],
   );
+
+  const availableTracks = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of students.data ?? []) {
+      if (s.track) set.add(s.track);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [students.data]);
 
   const [displayedNext, setDisplayedNext] = useState<StudentSummary | null>(
     null,
@@ -160,6 +181,10 @@ function StageRoute() {
       {confirmOpen && (
         <ConfirmGenerate
           currentCode={stageCode}
+          tracks={tracks}
+          availableTracks={availableTracks}
+          onSetCode={(code) => setStageCode(code)}
+          onSetTracks={(t) => setTracks(t)}
           onCancel={() => setConfirmOpen(false)}
           onGenerate={() => {
             generate();
@@ -322,18 +347,50 @@ function Idle() {
 
 function ConfirmGenerate({
   currentCode,
+  tracks,
+  availableTracks,
+  onSetCode,
+  onSetTracks,
   onCancel,
   onGenerate,
   onClear,
 }: {
   currentCode: string | null;
+  tracks: string[] | null;
+  availableTracks: string[];
+  onSetCode: (code: string) => void;
+  onSetTracks: (tracks: string[] | null) => void;
   onCancel: () => void;
   onGenerate: () => void;
   onClear: () => void;
 }) {
   const base = window.location.origin;
-  const pairUrl = `${base}/companion${currentCode ? `?code=${currentCode}` : ""}`;
-  const slots = Array.from({ length: 4 }, (_, i) => currentCode?.[i] ?? null);
+  const params = new URLSearchParams();
+  if (currentCode) params.set("code", currentCode);
+  if (currentCode && tracks && tracks.length > 0)
+    params.set("tracks", tracks.join(","));
+  const qs = params.toString();
+  const pairUrl = `${base}/companion${qs ? `?${qs}` : ""}`;
+
+  // Editable draft, typed straight into the big slots (like the companion
+  // pair modal). Applied to the live code via Enter / "Use this".
+  const [draft, setDraft] = useState((currentCode ?? "").slice(0, 4));
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Re-sync when the live code changes out from under us (e.g. Generate).
+  useEffect(() => setDraft((currentCode ?? "").slice(0, 4)), [currentCode]);
+
+  const draftValid = isValidStageCode(draft);
+  const canApply = draftValid && draft !== currentCode;
+  const applyDraft = () => {
+    if (canApply) onSetCode(draft);
+  };
+
+  const toggleTrack = (t: string) => {
+    const set = new Set(tracks ?? []);
+    if (set.has(t)) set.delete(t);
+    else set.add(t);
+    onSetTracks(set.size > 0 ? Array.from(set) : null);
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -344,7 +401,7 @@ function ConfirmGenerate({
   }, [onCancel]);
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col bg-chalkboard text-black">
+    <div className="absolute inset-0 z-50 flex flex-col overflow-auto bg-chalkboard text-black">
       <button
         type="button"
         onClick={onCancel}
@@ -353,30 +410,61 @@ function ConfirmGenerate({
         Close
       </button>
 
-      <div className="flex flex-1 flex-col items-center justify-center px-12">
+      <input
+        ref={inputRef}
+        inputMode="text"
+        autoCapitalize="characters"
+        autoComplete="off"
+        spellCheck={false}
+        maxLength={4}
+        value={draft}
+        onChange={(e) => setDraft(sanitizeStageCodeInput(e.target.value))}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") applyDraft();
+        }}
+        className="sr-only"
+      />
+
+      <div className="flex flex-1 flex-col items-center justify-center px-12 py-16">
         <p className="font-mono text-sm tracking-[0.25em] uppercase">
           pair a companion to this stage
         </p>
 
-        <div
+        <button
+          type="button"
+          onClick={() => inputRef.current?.focus()}
           className="mt-8 flex items-center gap-4 sm:gap-6"
-          style={{ fontSize: "clamp(8rem, 22vw, 24rem)" }}
+          style={{ fontSize: "clamp(6rem, 18vw, 20rem)" }}
         >
-          {slots.map((ch, i) => (
-            <span
-              key={i}
-              className={cn(
-                "font-display flex items-center justify-center leading-none tracking-tight",
-                ch ? "text-black" : "text-slide animate-pulse",
-              )}
-              style={{ width: "0.7em", height: "1em" }}
-            >
-              {ch ?? "•"}
-            </span>
-          ))}
-        </div>
+          {Array.from({ length: 4 }).map((_, i) => {
+            const ch = draft[i] ?? "";
+            const isCaret = i === draft.length;
+            return (
+              <span
+                key={i}
+                className={cn(
+                  "font-display flex items-center justify-center leading-none tracking-tight",
+                  ch
+                    ? "text-black"
+                    : isCaret
+                      ? "text-slide animate-pulse"
+                      : "text-black/15",
+                )}
+                style={{ width: "0.7em", height: "1em" }}
+              >
+                {ch || "•"}
+              </span>
+            );
+          })}
+        </button>
 
-        <div className="mt-12 flex items-center gap-10">
+        <p className="mt-6 font-mono text-xs tracking-widest text-black/50 uppercase">
+          {canApply
+            ? "press enter to use this code"
+            : "tap the code to type your own"}
+        </p>
+
+        <div className="mt-10 flex items-center gap-10">
           <div className="qr-tinted rounded-2xl bg-chalkboard p-4">
             <QRCodeSVG
               value={pairUrl}
@@ -386,9 +474,56 @@ function ConfirmGenerate({
             />
           </div>
         </div>
+
+        {currentCode && (
+          <div className="mt-10 w-full max-w-md">
+            <p className="text-center font-mono text-xs tracking-[0.25em] text-black/50 uppercase">
+              tracks shown on this stage
+            </p>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              {availableTracks.length === 0 && (
+                <span className="font-mono text-xs text-black/40">
+                  no tracks yet
+                </span>
+              )}
+              {availableTracks.map((t) => {
+                const on = !tracks || tracks.includes(t);
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => toggleTrack(t)}
+                    className={cn(
+                      "rounded-full border px-4 py-1.5 font-mono text-sm tracking-widest uppercase transition",
+                      on
+                        ? "border-black bg-black text-chalkboard"
+                        : "border-black/20 bg-white text-black/50 hover:text-black",
+                    )}
+                  >
+                    {t}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2 text-center font-mono text-[11px] text-black/40">
+              {tracks && tracks.length > 0
+                ? "only selected tracks rotate & can send"
+                : "all tracks shown — tap to limit"}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col items-center justify-center gap-3 pb-12">
+        {canApply && (
+          <button
+            type="button"
+            onClick={applyDraft}
+            className="rounded-full border border-black px-6 py-2 font-mono text-sm font-bold backdrop-blur hover:bg-white"
+          >
+            Use {draft}
+          </button>
+        )}
         {currentCode && (
           <button
             type="button"

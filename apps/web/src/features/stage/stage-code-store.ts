@@ -28,6 +28,17 @@ export function generateStageCode(): string {
   throw new Error("Could not generate non-profane stage code after 32 attempts");
 }
 
+/** Uppercase and strip anything outside the code alphabet, capped at length.
+ *  Used to gate typed input so invalid chars (0/1, lookalikes) never appear. */
+export function sanitizeStageCodeInput(raw: string): string {
+  return raw
+    .toUpperCase()
+    .split("")
+    .filter((ch) => ALPHABET.includes(ch))
+    .join("")
+    .slice(0, CODE_LENGTH);
+}
+
 export function isValidStageCode(code: string): boolean {
   if (code.length !== CODE_LENGTH) return false;
   for (const ch of code) {
@@ -38,17 +49,35 @@ export function isValidStageCode(code: string): boolean {
 
 type StageCodeHandle = {
   stageCode: string | null;
+  /** Tracks this Stage shows. `null` = all tracks (no filter). Only meaningful
+   *  when a stageCode is set. */
+  tracks: string[] | null;
   setStageCode: (code: string | null) => void;
+  setTracks: (tracks: string[] | null) => void;
   generate: () => string;
   clear: () => void;
 };
 
+function parseTracks(raw: string | undefined): string[] | null {
+  if (!raw) return null;
+  const list = raw
+    .split(",")
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+  return list.length > 0 ? list : null;
+}
+
 export function useStageCode(): StageCodeHandle {
-  const search = useSearch({ strict: false }) as { code?: string };
+  const search = useSearch({ strict: false }) as {
+    code?: string;
+    tracks?: string;
+  };
   const navigate = useNavigate();
 
   const raw = search.code?.toUpperCase() ?? null;
   const stageCode = raw && isValidStageCode(raw) ? raw : null;
+  // A track filter only applies to a coded Stage; ignore it on the default Stage.
+  const tracks = stageCode ? parseTracks(search.tracks) : null;
 
   const setStageCode = useCallback(
     (code: string | null) => {
@@ -57,6 +86,22 @@ export function useStageCode(): StageCodeHandle {
         search: (prev: Record<string, unknown>) => ({
           ...prev,
           code: code ?? undefined,
+          // Dropping the code also drops any track filter.
+          tracks: code ? prev.tracks : undefined,
+        }),
+        replace: true,
+      });
+    },
+    [navigate],
+  );
+
+  const setTracks = useCallback(
+    (next: string[] | null) => {
+      navigate({
+        to: ".",
+        search: (prev: Record<string, unknown>) => ({
+          ...prev,
+          tracks: next && next.length > 0 ? next.join(",") : undefined,
         }),
         replace: true,
       });
@@ -72,5 +117,5 @@ export function useStageCode(): StageCodeHandle {
 
   const clear = useCallback(() => setStageCode(null), [setStageCode]);
 
-  return { stageCode, setStageCode, generate, clear };
+  return { stageCode, tracks, setStageCode, setTracks, generate, clear };
 }

@@ -9,6 +9,7 @@ export type QueueSnap = {
 
 export type StageSnap = {
   stageCode: string | null;
+  tracks: string[] | null;
   current: { studentUserId: string; startedAt: number; source: string } | null;
   dwellMs: number;
 };

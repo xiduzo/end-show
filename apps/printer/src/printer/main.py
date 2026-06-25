@@ -49,6 +49,35 @@ def _print_job(payload: dict) -> None:
         receipt.print_student(printer, payload)
 
 
+async def _ble_or_usb(render, usb_job) -> None:
+    """Print over BLE; on failure (when enabled) fall back to a wired USB print.
+
+    render() -> bytes produces the ESC/POS stream for the BLE transport.
+    usb_job(printer) prints the same content over a live USB session — it
+    re-renders through the strip-paced USB path rather than replaying the
+    single-raster BLE bytes, which the clone's small buffer would overrun.
+    """
+    data = await run_in_threadpool(render)
+    try:
+        await ble.send(data)
+        return
+    except Exception as ble_error:
+        if not config.FALLBACK_USB:
+            raise
+        log.warning("ble print failed (%s) — falling back to USB", ble_error)
+
+    def fallback():
+        with device.session("usb") as printer:
+            usb_job(printer)
+
+    try:
+        await run_in_threadpool(fallback)
+    except Exception as usb_error:
+        raise RuntimeError(
+            f"ble unreachable and usb fallback failed: {usb_error}"
+        ) from usb_error
+
+
 def _probe_printer() -> bool:
     # Startup-only write probe: opening a virtual BT SPP node is not proof it
     # prints, so write an ESC @ (init) and let a failed write surface a dead
@@ -82,8 +111,11 @@ async def print_student(request: PrintRequest):
     try:
         if config.BACKEND == "ble":
             # BLE is async: render bytes off the loop, then stream them over GATT.
-            data = await run_in_threadpool(receipt.render_student_bytes, payload)
-            await ble.send(data)
+            # If the radio is unreachable, _ble_or_usb falls back to wired USB.
+            await _ble_or_usb(
+                lambda: receipt.render_student_bytes(payload),
+                lambda printer: receipt.print_student(printer, payload),
+            )
         else:
             await run_in_threadpool(_print_job, payload)
     except Exception as error:
@@ -97,7 +129,7 @@ async def print_student(request: PrintRequest):
 async def print_test():
     try:
         if config.BACKEND == "ble":
-            await ble.send(await run_in_threadpool(receipt.render_test_bytes))
+            await _ble_or_usb(receipt.render_test_bytes, receipt.print_test_page)
         else:
             def job():
                 if config.BACKEND == "netum":
@@ -161,7 +193,17 @@ def run():
             if config.BACKEND == "ble":
                 import asyncio
 
-                asyncio.run(ble.probe())
+                try:
+                    asyncio.run(ble.probe())
+                except Exception as ble_error:
+                    if not config.FALLBACK_USB:
+                        raise
+                    log.warning(
+                        "startup self-test: ble unreachable (%s) — trying USB",
+                        ble_error,
+                    )
+                    with device.session("usb") as printer:
+                        receipt.print_self_test(printer)
             elif config.BACKEND == "netum":
                 with netum.NetumPrinter() as printer:
                     if not printer.is_connected:

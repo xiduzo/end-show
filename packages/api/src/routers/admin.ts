@@ -332,6 +332,22 @@ export const adminRouter = router({
       return { removed: removable.length };
     }),
 
+  trackOptions: staffProcedure.query(async (): Promise<string[]> => {
+    const rows = await db.select({ track: student.track }).from(student);
+    const counts = new Map<string, number>();
+    for (const r of rows) {
+      const t = (r.track ?? "").trim();
+      if (t) counts.set(t, (counts.get(t) ?? 0) + 1);
+    }
+    // Always surface the historical defaults even when no student uses them yet.
+    for (const seed of ["IxD", "DFT"]) {
+      if (!counts.has(seed)) counts.set(seed, 0);
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([t]) => t);
+  }),
+
   createStudent: staffProcedure
     .input(
       z.object({

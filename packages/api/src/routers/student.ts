@@ -22,7 +22,8 @@ import {
 
 export type StageColor = "slime" | "crayon" | "bubblegum";
 
-export type Track = "IxD" | "DFT";
+/** Free-form study track (e.g. "IxD", "DFT", or any cohort label). */
+export type Track = string;
 
 export type StudentSummary = {
   userId: string;
@@ -67,7 +68,7 @@ function isComplete(s: Omit<StudentSummary, "portraitUrl" | "workMediaKind">): b
 }
 
 const stageColorSchema = z.enum(["slime", "crayon", "bubblegum"]);
-export const trackSchema = z.enum(["IxD", "DFT"]);
+export const trackSchema = z.string().trim().min(1).max(40);
 
 const STAGE_COLORS: readonly StageColor[] = ["slime", "crayon", "bubblegum"];
 

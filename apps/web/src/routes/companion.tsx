@@ -4,7 +4,10 @@ import { z } from "zod";
 
 import { CompanionView } from "@/features/companion";
 
-const search = z.object({ code: z.string().optional() });
+const search = z.object({
+  code: z.string().optional(),
+  tracks: z.string().optional(),
+});
 
 export const Route = createFileRoute("/companion")({
   component: CompanionRoute,

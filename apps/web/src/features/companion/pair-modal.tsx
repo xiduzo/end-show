@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { isValidStageCode } from "@/features/stage";
+import { isValidStageCode, sanitizeStageCodeInput } from "@/features/stage";
 import { cn } from "@end-show/ui/lib/utils";
 
 const CODE_LENGTH = 4;
@@ -89,14 +89,7 @@ export function PairModal({
         spellCheck={false}
         maxLength={CODE_LENGTH}
         value={code}
-        onChange={(e) =>
-          setCode(
-            e.target.value
-              .toUpperCase()
-              .replace(/[^A-Z0-9]/g, "")
-              .slice(0, CODE_LENGTH),
-          )
-        }
+        onChange={(e) => setCode(sanitizeStageCodeInput(e.target.value))}
         onKeyDown={(e) => {
           if (e.key === "Enter" && valid) onPair(code);
         }}

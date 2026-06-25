@@ -65,6 +65,11 @@ export function CardEditor({
       mode === "staff" ? { excludeUserId: profile.userId } : undefined,
     ),
   );
+  const trackOptions = useQuery({
+    ...trpc.admin.trackOptions.queryOptions(),
+    enabled: mode === "staff",
+  });
+  const knownTracks = trackOptions.data ?? [];
   const stageConfig = useQuery(trpc.stage.config.queryOptions());
   const dwellSec = stageConfig.data
     ? Math.round(stageConfig.data.dwellMs / 1000)
@@ -107,7 +112,12 @@ export function CardEditor({
     return () => window.clearInterval(id);
   }, []);
 
-  const doSave = async (next: CardEditorDraft) => {
+  const doSave = async (raw: CardEditorDraft) => {
+    // Track is required and free-form; never persist an empty value mid-edit.
+    const next: CardEditorDraft = {
+      ...raw,
+      track: raw.track.trim() || "IxD",
+    };
     if (inFlightDraft.current) {
       saveTimer.current = window.setTimeout(() => doSave(next), 400);
       return;
@@ -380,23 +390,19 @@ export function CardEditor({
                   </Field>
                   {mode === "staff" && (
                     <Field label="Track" required>
-                      <div className="flex gap-2">
-                        {(["IxD", "DFT"] as const).map((t) => (
-                          <button
-                            key={t}
-                            type="button"
-                            onClick={() => update("track", t)}
-                            className={cn(
-                              "rounded-md border px-4 py-2 font-display text-base font-bold tracking-wider transition",
-                              draft.track === t
-                                ? "border-lego-dark bg-lego-dark text-chalkboard"
-                                : "border-lego-dark/20 bg-white text-lego-dark/60 hover:text-lego-dark",
-                            )}
-                          >
-                            {t}
-                          </button>
+                      <input
+                        list="card-editor-track-options"
+                        value={draft.track}
+                        onChange={(e) => update("track", e.target.value)}
+                        placeholder="IxD"
+                        maxLength={40}
+                        className={inputCls}
+                      />
+                      <datalist id="card-editor-track-options">
+                        {knownTracks.map((t) => (
+                          <option key={t} value={t} />
                         ))}
-                      </div>
+                      </datalist>
                     </Field>
                   )}
                   <Field label="Portfolio link">

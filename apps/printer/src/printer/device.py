@@ -104,28 +104,33 @@ def _connect_usb():
     )
 
 
-def _connect():
-    if config.BACKEND == "usb":
+def _connect(backend: str | None = None):
+    backend = backend or config.BACKEND
+    if backend == "usb":
         return _connect_usb()
     # netum never reaches here: it owns its own pyserial wire (see netum.py) and
     # main.py routes BACKEND=netum before ever opening a device.session().
-    raise ValueError(f"Unknown PRINTER_BACKEND: {config.BACKEND}")
+    raise ValueError(f"Unknown PRINTER_BACKEND: {backend}")
 
 
-def session():
+def session(backend: str | None = None):
     """Context manager: exclusive access to a fresh printer connection.
 
     A new connection per job keeps the service resilient to the printer
-    being switched off/on between prints.
+    being switched off/on between prints. `backend` overrides config.BACKEND so
+    the BLE path can open a wired USB session for its failure fallback.
     """
-    return _Session()
+    return _Session(backend)
 
 
 class _Session:
+    def __init__(self, backend: str | None = None):
+        self._backend = backend
+
     def __enter__(self):
         _lock.acquire()
         try:
-            self.printer = _connect()
+            self.printer = _connect(self._backend)
         except Exception:
             _lock.release()
             raise

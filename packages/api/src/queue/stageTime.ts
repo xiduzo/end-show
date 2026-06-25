@@ -1,7 +1,7 @@
 import { db } from "@end-show/db";
 import { user } from "@end-show/db/schema/auth";
 import { student, studentCompetency } from "@end-show/db/schema/student";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { isStudentProfileComplete } from "../profileCompleteness";
 import { type AppearanceRecord, getAppearanceLog } from "./appearanceLog";
@@ -36,7 +36,14 @@ const COMPANION_HIDE_DECILE = 0.1;
  * required text field non-empty and at least one competency tag. This
  * Uses the shared `isStudentProfileComplete` predicate.
  */
-async function eligibleStudentIds(): Promise<string[]> {
+async function eligibleStudentIds(
+  tracks?: string[] | null,
+): Promise<string[]> {
+  const roleFilter = eq(user.role, "student");
+  const where =
+    tracks && tracks.length > 0
+      ? and(roleFilter, inArray(student.track, tracks))
+      : roleFilter;
   const rows = await db
     .select({
       userId: student.userId,
@@ -47,7 +54,7 @@ async function eligibleStudentIds(): Promise<string[]> {
     })
     .from(student)
     .innerJoin(user, eq(user.id, student.userId))
-    .where(eq(user.role, "student"));
+    .where(where);
   if (rows.length === 0) return [];
   const comps = await db
     .select({ studentUserId: studentCompetency.studentUserId })
@@ -65,6 +72,16 @@ async function eligibleStudentIds(): Promise<string[]> {
       ),
     )
     .map((r) => r.userId);
+}
+
+/** Look up a single Student's track. Returns null when the Student row is
+ *  missing. Used by the queue to enforce a Stage's track filter on pushes. */
+export async function studentTrack(userId: string): Promise<string | null> {
+  const rows = await db
+    .select({ track: student.track })
+    .from(student)
+    .where(eq(student.userId, userId));
+  return rows[0]?.track ?? null;
 }
 
 /** Aggregate raw Appearance rows into per-Student ms summed across overlaps
@@ -93,8 +110,9 @@ function aggregate(
  *  eligible. ADR-0011. */
 export async function pickForRotation(
   exclude: Set<string>,
+  tracks?: string[] | null,
 ): Promise<string | null> {
-  const eligible = await eligibleStudentIds();
+  const eligible = await eligibleStudentIds(tracks);
   const pool = eligible.filter((id) => !exclude.has(id));
   if (pool.length === 0) return null;
 

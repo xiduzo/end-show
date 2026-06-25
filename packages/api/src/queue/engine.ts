@@ -1,7 +1,7 @@
 import { Queuer } from "@tanstack/pacer";
 
 import { type AppearanceSource, getAppearanceLog } from "./appearanceLog";
-import { pickForRotation } from "./stageTime";
+import { pickForRotation, studentTrack } from "./stageTime";
 
 type Tier = "kiosk" | "mobile";
 type QueueSource = "kiosk" | "mobile" | "rotation" | "resume";
@@ -28,6 +28,9 @@ export type QueueSnapshot = {
 
 export type StageSnapshot = {
   stageCode: string | null;
+  /** Tracks this Stage shows. `null` = all tracks. Lets Companions apply the
+   *  same hard filter even when they paired by code without the tracks param. */
+  tracks: string[] | null;
   current: {
     studentUserId: string;
     startedAt: number;
@@ -38,6 +41,9 @@ export type StageSnapshot = {
 
 type ChannelState = {
   stageCode: string | null;
+  /** Tracks this Stage displays. `null` = all tracks (no filter). Set by the
+   *  Stage display via subscribeStage; companions read it but never write. */
+  tracks: string[] | null;
   current: CurrentEntry | null;
   queuer: Queuer<QueueItem>;
   resumeBump: number;
@@ -70,6 +76,7 @@ function getChannel(stageCode: string | null): ChannelState {
   if (!ch) {
     ch = {
       stageCode,
+      tracks: null,
       current: null,
       queuer: new Queuer<QueueItem>(noop, {
         started: false,
@@ -105,7 +112,12 @@ function snapshotStage(ch: ChannelState): StageSnapshot {
         source: ch.current.source,
       }
     : null;
-  return { stageCode: ch.stageCode, current: cur, dwellMs: DWELL_MS };
+  return {
+    stageCode: ch.stageCode,
+    tracks: ch.tracks,
+    current: cur,
+    dwellMs: DWELL_MS,
+  };
 }
 
 function emitQueue(ch: ChannelState): void {
@@ -151,7 +163,7 @@ function dropPreempters(ch: ChannelState): void {
 async function nextRotationCandidate(ch: ChannelState): Promise<string | null> {
   const exclude = queuedIds(ch);
   if (ch.current) exclude.add(ch.current.studentUserId);
-  return pickForRotation(exclude);
+  return pickForRotation(exclude, ch.tracks);
 }
 
 async function topUp(ch: ChannelState): Promise<void> {
@@ -213,7 +225,7 @@ async function advance(ch: ChannelState): Promise<void> {
 
 export type PushResult =
   | { ok: true; preempted: boolean; extended?: boolean }
-  | { ok: false; reason: "currently-on-stage" };
+  | { ok: false; reason: "currently-on-stage" | "off-track" };
 
 export async function pushToQueue(opts: {
   stageCode: string | null;
@@ -221,6 +233,16 @@ export async function pushToQueue(opts: {
   tier: Tier;
 }): Promise<PushResult> {
   const ch = getChannel(opts.stageCode);
+
+  // Hard track filter: a Stage limited to certain tracks rejects pushes from
+  // Students outside that set. Skipped when no filter is set (tracks === null).
+  if (ch.tracks && ch.tracks.length > 0) {
+    const track = await studentTrack(opts.studentUserId);
+    if (track === null || !ch.tracks.includes(track)) {
+      return { ok: false, reason: "off-track" };
+    }
+  }
+
   if (ch.current?.studentUserId === opts.studentUserId) {
     ch.current.startedAt = Date.now();
     if (ch.timer) clearTimeout(ch.timer);
@@ -299,8 +321,12 @@ export function subscribeQueue(
 export function subscribeStage(
   stageCode: string | null,
   cb: (s: StageSnapshot) => void,
+  tracks?: string[] | null,
 ): () => void {
   const ch = getChannel(stageCode);
+  // Only the Stage display passes `tracks` (array or explicit null = all).
+  // Companions omit it (undefined) so they never clobber the filter.
+  if (tracks !== undefined) ch.tracks = tracks;
   ch.stageListeners.add(cb);
   cb(snapshotStage(ch));
   if (!ch.current && !ch.timer) {

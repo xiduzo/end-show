@@ -22,7 +22,12 @@ import { WallLane } from "./wall-lane";
 import { WallShowcase } from "./wall-showcase";
 
 export function CompanionView({ tier }: { tier: CompanionTier }) {
-  const { stageCode, setStageCode, clear: clearStageCode } = useStageCode();
+  const {
+    stageCode,
+    tracks,
+    setStageCode,
+    clear: clearStageCode,
+  } = useStageCode();
   useStudentUpdates();
   const students = useQuery({
     ...trpc.student.listEligible.queryOptions(),
@@ -79,16 +84,35 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
     ? (list.find((s) => s.userId === showcasedId) ?? null)
     : null;
 
+  // Prefer the Stage's authoritative filter (from its snapshot); fall back to
+  // the URL param so the wall filters correctly before the first snapshot.
+  const effectiveTracks = stage?.tracks ?? tracks;
+  const trackSet = useMemo(
+    () =>
+      effectiveTracks && effectiveTracks.length > 0
+        ? new Set(effectiveTracks)
+        : null,
+    [effectiveTracks],
+  );
+
+  // Hard track filter: a coded Stage limited to certain tracks never surfaces
+  // Students outside that set. Applied up front so the count, the competency
+  // chips, and search all operate within the allowed tracks.
+  const baseList = useMemo(
+    () => (trackSet ? list.filter((s) => trackSet.has(s.track)) : list),
+    [list, trackSet],
+  );
+
   const allCompetencies = useMemo(
-    () => Array.from(new Set(list.flatMap((s) => s.competencies))).sort(),
-    [list],
+    () => Array.from(new Set(baseList.flatMap((s) => s.competencies))).sort(),
+    [baseList],
   );
 
   const isFiltering = search.length > 0 || selectedComps.length > 0;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return list.filter((s) => {
+    return baseList.filter((s) => {
       // Stage Time fairness (ADR-0011): hide top-decile Students from the
       // idle list. Any active filter / search restores them — intent wins.
       if (!isFiltering && s.hideWhenIdle) return false;
@@ -102,7 +126,7 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
         s.competencies.some((c) => selectedComps.includes(c));
       return textOk && compOk;
     });
-  }, [list, search, selectedComps, isFiltering]);
+  }, [baseList, search, selectedComps, isFiltering]);
 
   const fullQueue = useMemo(
     () => (queue?.items ?? []).map((i) => i.studentUserId),
@@ -146,6 +170,9 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
       if (!res.ok && res.reason === "currently-on-stage") {
         toast.error("Already on stage");
       }
+      if (!res.ok && res.reason === "off-track") {
+        toast.error("Not on this stage's track");
+      }
       return res;
     },
     [push, stageCode, tier],
@@ -186,7 +213,7 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
           setWallShuffleSeed(Math.floor(Math.random() * 0x7fffffff));
         }}
         resultCount={filtered.length}
-        totalCount={list.length}
+        totalCount={baseList.length}
         showcasedId={showcasedId}
       />
 
@@ -194,7 +221,7 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
         {filtered.length === 0 ? (
           <EmptyState
             loading={students.isLoading}
-            filtering={isFiltering && list.length > 0}
+            filtering={isFiltering && baseList.length > 0}
           />
         ) : (
           <div className="relative h-full w-full">

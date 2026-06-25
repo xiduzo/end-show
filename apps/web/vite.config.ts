@@ -39,12 +39,12 @@ export default defineConfig({
             urlPattern: ({ request }) => request.destination === "image",
             handler: "CacheFirst",
             options: {
-              cacheName: "student-images",
+              cacheName: "student-images-v2",
               expiration: {
                 maxEntries: 200,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
               },
-              cacheableResponse: { statuses: [0, 200] },
+              cacheableResponse: { statuses: [200] },
             },
           },
           {
@@ -53,7 +53,7 @@ export default defineConfig({
               /\.(mp4|webm|mov|m4v)$/i.test(url.pathname),
             handler: "CacheFirst",
             options: {
-              cacheName: "student-videos",
+              cacheName: "student-videos-v2",
               expiration: {
                 maxEntries: 50,
                 maxAgeSeconds: 60 * 60 * 24 * 30,

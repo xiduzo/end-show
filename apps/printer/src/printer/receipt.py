@@ -49,13 +49,19 @@ def _fetch_portrait(url: str) -> Image.Image | None:
 
 
 def _atkinson_dither(image: Image.Image) -> Image.Image:
-    """1-bit Atkinson dithering, returned as an L image of pure 0/255 pixels.
+    """1-bit serpentine Atkinson dithering, returned as an L image of pure 0/255.
 
     Atkinson (the original Mac/HyperCard dither) diffuses only 6/8 of each
     pixel's quantisation error to its neighbours, deliberately dropping the
     other 2/8. On a 1-bit thermal head that keeps highlights clean and edges
     crisp where Floyd-Steinberg (PIL's convert("1") default) smears a face into
     muddy grey noise. Kept on the portrait only; text/QR are thresholded.
+
+    The scan is serpentine (alternating L->R / R->L) instead of always
+    left-to-right. A face is mostly large smooth tonal areas (cheeks, forehead);
+    a fixed scan direction makes Atkinson's dropped error pile up the same way
+    every row, printing as diagonal "worm" streaks across skin. Mirroring every
+    other row breaks that correlation so gradients read as even stipple.
     """
     arr = np.asarray(image.convert("L"), dtype=np.float32).copy()
     h, w = arr.shape
@@ -63,24 +69,53 @@ def _atkinson_dither(image: Image.Image) -> Image.Image:
         row = arr[y]
         below = arr[y + 1] if y + 1 < h else None
         below2 = arr[y + 2] if y + 2 < h else None
-        for x in range(w):
+        # serpentine: even rows scan left->right, odd rows right->left, with the
+        # forward/back error offsets mirrored to match the travel direction.
+        forward = y % 2 == 0
+        xs = range(w) if forward else range(w - 1, -1, -1)
+        step = 1 if forward else -1
+        for x in xs:
             old = row[x]
             new = 255.0 if old >= 128 else 0.0
             row[x] = new
             err = (old - new) / 8.0
-            if x + 1 < w:
-                row[x + 1] += err
-            if x + 2 < w:
-                row[x + 2] += err
+            ahead1, ahead2 = x + step, x + 2 * step
+            if 0 <= ahead1 < w:
+                row[ahead1] += err
+            if 0 <= ahead2 < w:
+                row[ahead2] += err
             if below is not None:
-                if x - 1 >= 0:
-                    below[x - 1] += err
+                if 0 <= x - step < w:
+                    below[x - step] += err
                 below[x] += err
-                if x + 1 < w:
-                    below[x + 1] += err
+                if 0 <= ahead1 < w:
+                    below[ahead1] += err
             if below2 is not None:
                 below2[x] += err
     return Image.fromarray(arr.clip(0, 255).astype(np.uint8), "L")
+
+
+def _skin_curve(p: int) -> int:
+    """Per-pixel tone map tuned for faces, applied before dithering.
+
+    Two combined moves on the 0..255 ramp:
+    * gamma 0.8 lift — a thermal head prints heavy, so without it faces clog to
+      a black blob (highlights survive, midtones stay open).
+    * a gentle S-curve pivoting at mid-grey — skin tones cluster in the midtones,
+      and a flat gamma lift leaves them as one undifferentiated grey mass that
+      dithers into a featureless face. The S adds local midtone contrast so the
+      modelling (cheekbone, brow, nose shadow) separates, while easing back off
+      the extremes so highlights don't blow and shadows don't crush.
+    """
+    g = 255 * (p / 255) ** 0.8
+    # smoothstep-based S around mid-grey; strength kept mild to avoid posterising
+    n = g / 255
+    s = n * n * (3 - 2 * n)  # smoothstep: pushes <0.5 down, >0.5 up
+    out = g + (s * 255 - g) * 0.35
+    return round(min(255, max(0, out)))
+
+
+_SKIN_LUT = [_skin_curve(p) for p in range(256)]
 
 
 def _prepare_portrait(image: Image.Image) -> Image.Image:
@@ -88,12 +123,13 @@ def _prepare_portrait(image: Image.Image) -> Image.Image:
     image = image.convert("L")
     height = round(image.height * WIDTH / image.width)
     image = image.resize((WIDTH, height), Image.LANCZOS)
-    # stretch the tonal range, then a gamma < 1 lifts the midtones: a thermal
-    # head prints heavy, so without this faces clog to a black blob.
+    # stretch the tonal range, then a face-tuned tone curve (lift + midtone S).
     image = ImageOps.autocontrast(image, cutoff=2)
-    image = image.point(lambda p: round(255 * (p / 255) ** 0.8))
-    # recover edge detail lost to the downscale before it's crushed to 1-bit
-    image = image.filter(ImageFilter.UnsharpMask(radius=1.5, percent=120, threshold=2))
+    image = image.point(_SKIN_LUT)
+    # recover edge detail lost to the downscale before it's crushed to 1-bit.
+    # threshold=3 so the unsharp lifts real features (eyes, hairline) without
+    # also amplifying flat-skin sensor noise into dither speckle.
+    image = image.filter(ImageFilter.UnsharpMask(radius=1.5, percent=110, threshold=3))
     return _atkinson_dither(image)
 
 

@@ -26,11 +26,15 @@ REPO="${HERE:h:h}"         # up two levels: apps/printer -> repo
 # a) Firefox kiosk. Launch it FIRST, so the Stage page is up even if the printer
 #    has trouble. Wait for the GUI: at login we can fire before WindowServer/Dock
 #    is ready and Firefox would silently bail (wait up to 30s, then try anyway).
-#    `open` is more reliable than the raw binary from launchd. The pgrep guard
-#    keeps a KeepAlive restart from stacking a second window.
+#    Launch the raw binary, NOT `open`: `open --args` hands the URL to any
+#    already-running Firefox and drops the flags, so --kiosk is ignored and you
+#    get a normal windowed page. The dedicated --profile + --new-instance force a
+#    fresh kiosk instance; the pgrep guard keeps a KeepAlive restart from stacking
+#    windows.
+FIREFOX="/Applications/Firefox.app/Contents/MacOS/firefox"
 for i in {1..30}; do pgrep -xq Dock && break || sleep 1; done
 if ! pgrep -f "endshow-kiosk-profile" >/dev/null; then
-  open -na Firefox --args --kiosk --new-instance --profile "$PROFILE" "$URL"
+  "$FIREFOX" --kiosk --new-instance --profile "$PROFILE" "$URL" &
 fi
 
 # b) print service in the foreground; caffeinate keeps the machine + display awake

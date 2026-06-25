@@ -343,6 +343,7 @@ export function BudgetBar({
                     <img
                       src={portrait}
                       alt=""
+                      crossOrigin="anonymous"
                       className="size-5 shrink-0 rounded-full object-cover opacity-80 group-hover:opacity-100"
                     />
                   ) : (

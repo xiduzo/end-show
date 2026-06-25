@@ -1245,6 +1245,7 @@ function Row({
           <img
             src={row.portraitUrl}
             alt={`${row.displayName || row.name} portrait`}
+            crossOrigin="anonymous"
             className="h-9 w-9 shrink-0 rounded-full object-cover"
           />
         ) : (
@@ -1371,12 +1372,14 @@ function Row({
                   autoPlay
                   loop
                   playsInline
+                  crossOrigin="anonymous"
                   className="h-36 w-full rounded object-cover"
                 />
               ) : (
                 <img
                   src={row.workMediaUrl}
                   alt={`${row.displayName || row.name} showcase`}
+                  crossOrigin="anonymous"
                   className="h-36 w-full rounded object-cover"
                 />
               )}

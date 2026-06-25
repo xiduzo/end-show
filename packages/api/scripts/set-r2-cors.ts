@@ -34,7 +34,10 @@ await client.send(
           AllowedOrigins: allowedOrigins,
           AllowedMethods: ["PUT", "GET", "HEAD"],
           AllowedHeaders: ["content-type", "content-length"],
-          ExposeHeaders: ["ETag"],
+          // GET/HEAD reads are served cross-origin to crossOrigin="anonymous"
+          // <img>/<video> so the service worker can cache them cleanly.
+          // Content-Range/Accept-Ranges let video range-requests cache too.
+          ExposeHeaders: ["ETag", "Content-Length", "Content-Range", "Accept-Ranges"],
           MaxAgeSeconds: 3600,
         },
       ],

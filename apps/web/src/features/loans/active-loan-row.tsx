@@ -109,6 +109,7 @@ export function ActiveLoanRow({
         <img
           src={loan.peer.portraitUrl}
           alt=""
+          crossOrigin="anonymous"
           className={cn(
             "size-6 shrink-0 rounded-full object-cover ring-2",
             stageRing(loan.peer?.stageColor) ?? (isLent ? "ring-slime" : "ring-slide"),

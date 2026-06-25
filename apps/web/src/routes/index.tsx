@@ -259,6 +259,7 @@ function AssetPreloader({
             key={`portrait-${s.userId}`}
             src={s.portraitUrl}
             alt=""
+            crossOrigin="anonymous"
             loading="eager"
             decoding="async"
           />
@@ -284,6 +285,7 @@ function AssetPreloader({
               key={`upcoming-image-${s.userId}`}
               src={m.url}
               alt=""
+              crossOrigin="anonymous"
               loading="eager"
               decoding="async"
             />

@@ -77,6 +77,7 @@ export function IncomingLoanRequest({
         <img
           src={loan.borrower.portraitUrl}
           alt=""
+          crossOrigin="anonymous"
           className={`size-6 shrink-0 rounded-full object-cover ring-2 ${stageRing(loan.borrower?.stageColor)}`}
         />
       ) : (

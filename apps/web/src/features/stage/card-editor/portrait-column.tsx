@@ -40,6 +40,7 @@ export function PortraitColumn({
           <img
             src={portraitUrl}
             alt="Portrait"
+            crossOrigin="anonymous"
             className="h-full w-full object-cover object-top"
           />
         ) : readOnly ? (

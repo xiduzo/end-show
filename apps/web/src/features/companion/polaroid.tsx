@@ -129,6 +129,7 @@ export function Polaroid({
             <img
               src={student.portraitUrl}
               alt={student.displayName}
+              crossOrigin="anonymous"
               draggable={false}
               className="pointer-events-none h-full w-full select-none object-cover object-top"
               style={{ touchAction: "none" }}

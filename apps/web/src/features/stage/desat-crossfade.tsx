@@ -26,6 +26,7 @@ export function DesatCrossfade({
         key={src}
         src={src}
         alt={alt}
+        crossOrigin="anonymous"
         className={className}
         initial={{ opacity: 0, filter: enterFilter }}
         animate={{ opacity: 1, filter: restFilter }}

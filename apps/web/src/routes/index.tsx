@@ -206,48 +206,12 @@ function AssetPreloader({
     .map((id) => students.find((s) => s.userId === id))
     .filter((s): s is StudentSummary => s != null);
 
-  useEffect(() => {
-    let cancelled = false;
-    const warmed = new Set<string>();
-    const urls: string[] = [];
-    for (const s of students) {
-      if (s.portraitUrl) urls.push(s.portraitUrl);
-      const m = resolveWorkMedia(s);
-      if (m.kind !== "none") urls.push(m.url);
-    }
-
-    async function warm() {
-      for (const url of urls) {
-        if (cancelled) return;
-        if (warmed.has(url)) continue;
-        warmed.add(url);
-        try {
-          await fetch(url, { mode: "cors", cache: "force-cache" });
-        } catch {
-          // swallow — SW will retry on first real use
-        }
-      }
-    }
-
-    const idle = (
-      window as unknown as {
-        requestIdleCallback?: (cb: () => void) => number;
-      }
-    ).requestIdleCallback;
-    const handle = idle ? idle(warm) : window.setTimeout(warm, 1500);
-
-    return () => {
-      cancelled = true;
-      const cancelIdle = (
-        window as unknown as {
-          cancelIdleCallback?: (h: number) => void;
-        }
-      ).cancelIdleCallback;
-      if (idle && cancelIdle) cancelIdle(handle as number);
-      else window.clearTimeout(handle as number);
-    };
-  }, [students]);
-
+  // The hidden <img>/<video> tags below are the warm path: as cors requests
+  // with request.destination "image"/"video" they populate the SW runtime
+  // caches (student-images-v2 / student-videos-v2) directly. A parallel
+  // fetch() warm would duplicate every request — Firefox coalesces the pair
+  // and aborts one (NS_BINDING_ABORTED) — and wouldn't even hit the image
+  // cache rule, which keys on request.destination === "image". So no fetch().
   return (
     <div
       aria-hidden

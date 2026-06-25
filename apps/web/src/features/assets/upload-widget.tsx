@@ -41,11 +41,12 @@ export function UploadWidget({
     setBusy(true);
     setProgress(0);
     try {
-      const { assetId, r2Key, uploadUrl } = await requestUpload.mutateAsync({
-        kind,
-        mimeType: file.type,
-        bytes: file.size,
-      });
+      const { assetId, r2Key, uploadUrl, softWarning } =
+        await requestUpload.mutateAsync({
+          kind,
+          mimeType: file.type,
+          bytes: file.size,
+        });
 
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -74,6 +75,7 @@ export function UploadWidget({
       });
 
       toast.success(`${label} uploaded`);
+      if (softWarning) toast.warning(softWarning);
       onUploaded();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");

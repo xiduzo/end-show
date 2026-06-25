@@ -21,26 +21,11 @@ import {
   usePrinterBridge,
   useStageCode,
 } from "@/features/stage";
-import { trpc, trpcClient } from "@/lib/trpc";
+import { trpc } from "@/lib/trpc";
+import { useStageChannel } from "@/lib/use-stage-channel";
 import { useStudentUpdates } from "@/lib/use-student-updates";
 import { useTapGesture } from "@/lib/use-tap-gesture";
 import { cn } from "@end-show/ui/lib/utils";
-
-type StageSnap = {
-  stageCode: string | null;
-  tracks: string[] | null;
-  current: { studentUserId: string; startedAt: number; source: string } | null;
-  dwellMs: number;
-};
-
-type QueueSnap = {
-  stageCode: string | null;
-  items: Array<{
-    studentUserId: string;
-    source: "kiosk" | "mobile" | "rotation" | "resume";
-  }>;
-  next: string | null;
-};
 
 const stageSearch = z.object({
   code: z.string().optional(),
@@ -65,8 +50,6 @@ export const Route = createFileRoute("/")({
 function StageRoute() {
   const { stageCode, tracks, setStageCode, setTracks, generate, clear } =
     useStageCode();
-  const [snap, setSnap] = useState<StageSnap | null>(null);
-  const [queue, setQueue] = useState<QueueSnap | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   useStudentUpdates();
   usePrinterBridge(stageCode);
@@ -77,30 +60,9 @@ function StageRoute() {
     onTrigger: () => setConfirmOpen(true),
   });
 
-  const tracksKey = tracks ? tracks.join(",") : "";
-  useEffect(() => {
-    const sub = trpcClient.stage.current.subscribe(
-      // null (not undefined) tells the server "all tracks" and clears any
-      // stale filter on this Stage's channel.
-      { stageCode, tracks: tracksKey ? tracksKey.split(",") : null },
-      {
-        onData: (data) => setSnap(data as StageSnap),
-        onError: (err) => console.error("stage.current error", err),
-      },
-    );
-    return () => sub.unsubscribe();
-  }, [stageCode, tracksKey]);
-
-  useEffect(() => {
-    const sub = trpcClient.queue.watch.subscribe(
-      { stageCode },
-      {
-        onData: (data) => setQueue(data as QueueSnap),
-        onError: (err) => console.error("queue.watch error", err),
-      },
-    );
-    return () => sub.unsubscribe();
-  }, [stageCode]);
+  // The Stage owns its track filter, so it passes `tracks` (null = all tracks,
+  // which also clears any stale filter on the channel).
+  const { stage: snap, queue } = useStageChannel({ stageCode, tracks });
 
   const current = snap?.current
     ? students.data?.find((s) => s.userId === snap.current!.studentUserId)

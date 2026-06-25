@@ -1,6 +1,7 @@
 import { Queuer } from "@tanstack/pacer";
 
 import { type AppearanceSource, getAppearanceLog } from "./appearanceLog";
+import { type TimerHandle, getClock } from "./clock";
 import { pickForRotation, studentTrack } from "./stageTime";
 
 type Tier = "kiosk" | "mobile";
@@ -47,7 +48,7 @@ type ChannelState = {
   current: CurrentEntry | null;
   queuer: Queuer<QueueItem>;
   resumeBump: number;
-  timer: ReturnType<typeof setTimeout> | null;
+  timer: TimerHandle | null;
   queueListeners: Set<(s: QueueSnapshot) => void>;
   stageListeners: Set<(s: StageSnapshot) => void>;
 };
@@ -179,22 +180,53 @@ async function topUp(ch: ChannelState): Promise<void> {
   }
 }
 
+/** Cancel this channel's Dwell timer, if armed. */
+function clearDwell(ch: ChannelState): void {
+  if (ch.timer != null) {
+    getClock().clearTimeout(ch.timer);
+    ch.timer = null;
+  }
+}
+
+/** (Re)arm the Dwell timer so the Stage advances after one Dwell. */
+function scheduleDwell(ch: ChannelState): void {
+  clearDwell(ch);
+  ch.timer = getClock().setTimeout(() => advance(ch), DWELL_MS);
+}
+
+/**
+ * Close the in-flight Appearance for this channel, if any. Clears `ch.current`
+ * first so the Stage can advance, then durably ends the row. A failed write is
+ * logged and left for the janitor (ADR-0007 §Recovery) rather than freezing the
+ * Stage on a transient DB error. The single home for "close the current
+ * Appearance" — previously open-coded at three sites with three orderings.
+ * Safe to `void` from a synchronous context (it clears `ch.current` before the
+ * first await, so a following `emitStage` already sees an empty Stage).
+ */
+async function closeCurrent(ch: ChannelState): Promise<void> {
+  const cur = ch.current;
+  if (!cur) return;
+  ch.current = null;
+  try {
+    await getAppearanceLog().end(cur.appearanceId, getClock().now());
+  } catch (err) {
+    console.error(
+      `[queue] failed to close appearance ${cur.appearanceId}; leaving open for the janitor`,
+      err,
+    );
+  }
+}
+
 async function advance(ch: ChannelState): Promise<void> {
   const log = getAppearanceLog();
 
-  if (ch.current) {
-    await log.end(ch.current.appearanceId);
-    ch.current = null;
-  }
+  await closeCurrent(ch);
 
   await topUp(ch);
   const next = ch.queuer.getNextItem() ?? null;
 
   if (!next) {
-    if (ch.timer) {
-      clearTimeout(ch.timer);
-      ch.timer = null;
-    }
+    clearDwell(ch);
     emitStage(ch);
     emitQueue(ch);
     return;
@@ -217,10 +249,7 @@ async function advance(ch: ChannelState): Promise<void> {
   emitStage(ch);
   emitQueue(ch);
 
-  if (ch.timer) clearTimeout(ch.timer);
-  ch.timer = setTimeout(() => {
-    void advance(ch);
-  }, DWELL_MS);
+  scheduleDwell(ch);
 }
 
 export type PushResult =
@@ -244,25 +273,17 @@ export async function pushToQueue(opts: {
   }
 
   if (ch.current?.studentUserId === opts.studentUserId) {
-    ch.current.startedAt = Date.now();
-    if (ch.timer) clearTimeout(ch.timer);
-    ch.timer = setTimeout(() => {
-      void advance(ch);
-    }, DWELL_MS);
+    ch.current.startedAt = getClock().now();
+    scheduleDwell(ch);
     emitStage(ch);
     return { ok: true, preempted: false, extended: true };
   }
 
   // Preempt path — companion send while someone is on stage.
   if (ch.current) {
-    if (ch.timer) {
-      clearTimeout(ch.timer);
-      ch.timer = null;
-    }
-    const log = getAppearanceLog();
+    clearDwell(ch);
     const old = ch.current;
-    ch.current = null;
-    await log.end(old.appearanceId);
+    await closeCurrent(ch);
 
     // A new preempt replaces any prior preempter still pending in queue.
     dropPreempters(ch);
@@ -341,17 +362,23 @@ export function subscribeStage(
       // Cancel the dwell timer and close any open Appearance row. The
       // queue itself is preserved; a reconnecting Stage re-advances
       // from the head on its next subscribeStage.
-      if (ch.timer) {
-        clearTimeout(ch.timer);
-        ch.timer = null;
-      }
+      clearDwell(ch);
       if (ch.current) {
-        const log = getAppearanceLog();
-        const old = ch.current;
-        ch.current = null;
-        void log.end(old.appearanceId);
+        // closeCurrent clears ch.current synchronously, so emitStage below
+        // already snapshots an empty Stage; the row close finishes async.
+        void closeCurrent(ch);
         emitStage(ch);
       }
     }
   };
+}
+
+/**
+ * Test-only: clear all in-memory channel state (queues, current, timers)
+ * between cases. The `channels` Map is a module singleton with no production
+ * reset; tests call this in teardown so one case never leaks into the next.
+ */
+export function __resetChannelsForTest(): void {
+  for (const ch of channels.values()) clearDwell(ch);
+  channels.clear();
 }

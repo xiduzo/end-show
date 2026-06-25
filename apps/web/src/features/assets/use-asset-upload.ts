@@ -98,12 +98,13 @@ export function useAssetUpload(opts: {
     setBusy(true);
     setProgress(0);
     try {
-      const { assetId, r2Key, uploadUrl } = await requestUpload.mutateAsync({
-        kind,
-        mimeType: file.type,
-        bytes: file.size,
-        targetUserId: opts.targetUserId,
-      });
+      const { assetId, r2Key, uploadUrl, softWarning } =
+        await requestUpload.mutateAsync({
+          kind,
+          mimeType: file.type,
+          bytes: file.size,
+          targetUserId: opts.targetUserId,
+        });
       await new Promise<void>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("PUT", uploadUrl);
@@ -130,6 +131,9 @@ export function useAssetUpload(opts: {
         targetUserId: opts.targetUserId,
       });
       opts.onUploaded();
+      // Soft band (CONTEXT.md): upload succeeded but the Student is over budget
+      // (within 1.20×). Surface the server's escalating warning.
+      if (softWarning) toast.warning(softWarning);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
     } finally {

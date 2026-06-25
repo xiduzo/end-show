@@ -1,0 +1,5 @@
+[test]
+# Set fake env before any module imports @end-show/env/server. The queue/budget
+# tests drive logic through the in-memory Clock / AppearanceLog / StudentDataStore
+# adapters, so the real db built at import time is never queried.
+preload = ["./test/setup.ts"]

@@ -1,10 +1,7 @@
-import { db } from "@end-show/db";
-import { user } from "@end-show/db/schema/auth";
-import { student, studentCompetency } from "@end-show/db/schema/student";
-import { and, eq, inArray } from "drizzle-orm";
-
 import { isStudentProfileComplete } from "../profileCompleteness";
+import { getStudentDataStore } from "../studentDataStore";
 import { type AppearanceRecord, getAppearanceLog } from "./appearanceLog";
+import { getClock } from "./clock";
 
 /**
  * Stage Time — sum of a Student's on-Stage durations in the last rolling
@@ -25,8 +22,9 @@ export const STAGE_TIME_WINDOW_MS = 60 * 60 * 1000;
 const ROTATION_DROP_DECILE = 0.1;
 
 /** Top fraction of Stage-Time-leading Students hidden from the Companion
- *  list while no search/filter is active. The "intent overrides fairness"
- *  flip is applied by the caller. */
+ *  list while no search/filter is active. This module only flags them
+ *  (`hideWhenIdle`); the "intent overrides fairness" flip lives in
+ *  `../fairness` (visibleStudents), shared with the Companion client. */
 const COMPANION_HIDE_DECILE = 0.1;
 
 /**
@@ -39,49 +37,26 @@ const COMPANION_HIDE_DECILE = 0.1;
 async function eligibleStudentIds(
   tracks?: string[] | null,
 ): Promise<string[]> {
-  const roleFilter = eq(user.role, "student");
-  const where =
-    tracks && tracks.length > 0
-      ? and(roleFilter, inArray(student.track, tracks))
-      : roleFilter;
-  const rows = await db
-    .select({
-      userId: student.userId,
-      displayName: student.displayName,
-      pronouns: student.pronouns,
-      introduction: student.introduction,
-      workMediaAssetId: student.workMediaAssetId,
-    })
-    .from(student)
-    .innerJoin(user, eq(user.id, student.userId))
-    .where(where);
-  if (rows.length === 0) return [];
-  const comps = await db
-    .select({ studentUserId: studentCompetency.studentUserId })
-    .from(studentCompetency)
-    .where(inArray(studentCompetency.studentUserId, rows.map((r) => r.userId)));
-  const compCount = new Map<string, number>();
-  for (const c of comps) {
-    compCount.set(c.studentUserId, (compCount.get(c.studentUserId) ?? 0) + 1);
-  }
-  return rows
-    .filter((r) =>
+  const candidates = await getStudentDataStore().rotationCandidates(tracks);
+  return candidates
+    .filter((c) =>
       isStudentProfileComplete(
-        { ...r, workMediaUrl: r.workMediaAssetId },
-        compCount.get(r.userId) ?? 0,
+        {
+          displayName: c.displayName,
+          introduction: c.introduction,
+          workMediaUrl: c.workMediaAssetId,
+          pronouns: null,
+        },
+        c.competencyCount,
       ),
     )
-    .map((r) => r.userId);
+    .map((c) => c.userId);
 }
 
 /** Look up a single Student's track. Returns null when the Student row is
  *  missing. Used by the queue to enforce a Stage's track filter on pushes. */
 export async function studentTrack(userId: string): Promise<string | null> {
-  const rows = await db
-    .select({ track: student.track })
-    .from(student)
-    .where(eq(student.userId, userId));
-  return rows[0]?.track ?? null;
+  return getStudentDataStore().studentTrack(userId);
 }
 
 /** Aggregate raw Appearance rows into per-Student ms summed across overlaps
@@ -116,7 +91,7 @@ export async function pickForRotation(
   const pool = eligible.filter((id) => !exclude.has(id));
   if (pool.length === 0) return null;
 
-  const now = Date.now();
+  const now = getClock().now();
   const sinceMs = now - STAGE_TIME_WINDOW_MS;
   const records = await getAppearanceLog().rowsIn(pool, sinceMs);
   const stageTime = aggregate(records, sinceMs, now);
@@ -137,7 +112,7 @@ export async function rankForCompanion<
   T extends { userId: string; stageTimeMs: number; hideWhenIdle: boolean },
 >(list: T[]): Promise<T[]> {
   if (list.length === 0) return list;
-  const now = Date.now();
+  const now = getClock().now();
   const sinceMs = now - STAGE_TIME_WINDOW_MS;
   const ids = list.map((s) => s.userId);
   const records = await getAppearanceLog().rowsIn(ids, sinceMs);

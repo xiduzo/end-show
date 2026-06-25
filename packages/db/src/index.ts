@@ -23,7 +23,7 @@ export function createDb() {
     url,
     authToken: env.LIBSQL_AUTH_TOKEN,
     fetch: auth
-      ? (input, init) => {
+      ? (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
           const headers = new Headers(init?.headers);
           headers.set("Authorization", auth);
           return fetch(input, { ...init, headers });

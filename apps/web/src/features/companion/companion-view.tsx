@@ -1,3 +1,4 @@
+import { intentActive, isHiddenWhileIdle } from "@end-show/api/fairness";
 import type { StudentSummary } from "@end-show/api/routers/student";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AnimatePresence } from "motion/react";
@@ -6,7 +7,8 @@ import { toast } from "sonner";
 
 import { ConnectionIndicator } from "@/shell";
 import { useStageCode } from "@/features/stage";
-import { trpc, trpcClient } from "@/lib/trpc";
+import { trpc } from "@/lib/trpc";
+import { useStageChannel } from "@/lib/use-stage-channel";
 import { useStudentUpdates } from "@/lib/use-student-updates";
 import { useTapGesture } from "@/lib/use-tap-gesture";
 
@@ -16,7 +18,7 @@ import { PairModal } from "./pair-modal";
 import { SentFlash } from "./sent-flash";
 import { ShaderBg } from "./shader-bg";
 import { SENT_FLASH_MS, SHOWCASE_TIMEOUT_MS } from "./timings";
-import type { CompanionTier, QueueSnap, StageSnap } from "./types";
+import type { CompanionTier } from "./types";
 import { useUserActivity } from "./use-user-activity";
 import { WallLane } from "./wall-lane";
 import { WallShowcase } from "./wall-showcase";
@@ -37,8 +39,8 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
     refetchInterval: 60_000,
   });
   const push = useMutation(trpc.queue.push.mutationOptions());
-  const [queue, setQueue] = useState<QueueSnap | null>(null);
-  const [stage, setStage] = useState<StageSnap | null>(null);
+  // Companion omits `tracks` — only the Stage owns the channel's track filter.
+  const { stage, queue } = useStageChannel({ stageCode });
   const [showcasedId, setShowcasedId] = useState<string | null>(null);
   const [sourceRects, setSourceRects] = useState<{
     card: DOMRect;
@@ -55,28 +57,6 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
   useTapGesture({
     onTrigger: () => setPairOpen(true),
   });
-
-  useEffect(() => {
-    const sub = trpcClient.queue.watch.subscribe(
-      { stageCode },
-      {
-        onData: (d) => setQueue(d as QueueSnap),
-        onError: (e) => console.error("queue.watch error", e),
-      },
-    );
-    return () => sub.unsubscribe();
-  }, [stageCode]);
-
-  useEffect(() => {
-    const sub = trpcClient.stage.current.subscribe(
-      { stageCode },
-      {
-        onData: (d) => setStage(d as StageSnap),
-        onError: (e) => console.error("stage.current error", e),
-      },
-    );
-    return () => sub.unsubscribe();
-  }, [stageCode]);
 
   const list = students.data ?? [];
   const onStageId = stage?.current?.studentUserId ?? null;
@@ -108,14 +88,19 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
     [baseList],
   );
 
-  const isFiltering = search.length > 0 || selectedComps.length > 0;
+  const intent = {
+    searching: search.length > 0,
+    filtering: selectedComps.length > 0,
+  };
+  const isFiltering = intentActive(intent);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return baseList.filter((s) => {
-      // Stage Time fairness (ADR-0011): hide top-decile Students from the
-      // idle list. Any active filter / search restores them — intent wins.
-      if (!isFiltering && s.hideWhenIdle) return false;
+      // Stage Time fairness (ADR-0011): hide top-decile Students while idle;
+      // any search/filter restores them — intent wins. Rule lives in one
+      // place (@end-show/api/fairness), shared with the server.
+      if (isHiddenWhileIdle(s, intent)) return false;
       const text = [s.displayName, s.introduction, s.pronouns]
         .filter(Boolean)
         .join(" ")
@@ -126,6 +111,7 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
         s.competencies.some((c) => selectedComps.includes(c));
       return textOk && compOk;
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baseList, search, selectedComps, isFiltering]);
 
   const fullQueue = useMemo(

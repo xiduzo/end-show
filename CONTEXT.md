@@ -7,16 +7,16 @@ Glossary of domain terms for the Graduation Show application — the digital gra
 ### Student
 A graduating student showcased in the Graduation Show. A Student is a **structured profile**, not a free-form artifact uploaded by the student.
 
-Profile fields (required unless noted):
+Profile fields:
 - **Portrait** — a photo of the Student.
 - **Name** — display name.
 - **Pronouns** — e.g. "she/her", "they/them".
 - **Introduction** — short bio text.
 - **Competencies** — tags describing what the Student does (e.g. "UX Designer", "Developer"). At least one is required; multiple allowed.
 - **Link** — a single URL the Student chooses to share. Rendered on Stage as a QR code so visitors can scan it with their phone.
-- **Work Media** *(optional)* — a short graphic, video, or slideshow representing the Student's work.
+- **Work Media** — a short graphic, video, or slideshow representing the Student's work.
 
-A profile is **complete** when every required field above is non-empty.
+A profile is **complete** — the gate for Stage / Companion eligibility — when its **Name**, **Introduction**, **Work Media**, and **at least one Competency** are non-empty. This is the `isStudentProfileComplete` predicate (`packages/api/src/profileCompleteness.ts`). Portrait, Pronouns, and Link are collected on the profile but do **not** currently gate eligibility.
 
 A Student **is** an authenticated user of the system (see *Roles* below). Each Student owns exactly one Student profile and can edit it. Staff can view and edit any Student profile.
 
@@ -102,7 +102,7 @@ The Appearance Log is the seam at which the Queue subsystem meets durable storag
 2. **WIP** — Student logs in (OTP) and fills profile fields. Account is unpublished; not visible on Stage, not selectable in Companion.
 3. **Published** — Student toggles `isPublished = true`. If the profile is also *complete* (every required field filled), the Student is eligible to appear on Stage and to be picked from Companion. Subsequent edits while published are immediately live — there is no separate draft snapshot. A Student can unpublish at any time to take themselves off the show.
 
-Eligibility for Stage / Companion = `isPublished AND profileComplete`. Staff can force-publish on behalf of a Student if needed.
+Eligibility for Stage / Companion = `isPublished AND profileComplete`. Staff can force-publish on behalf of a Student if needed. A Staff-**flagged** Student is withheld from both the Companion list and Rotation regardless of completeness.
 
 ## Roles
 
@@ -163,7 +163,7 @@ The shared total capacity made available to Students.
 ### Student Budget
 Each Student is allocated a portion of the Storage Pool that caps how many bytes their assets may occupy.
 
-- **Default Budget**: Displayed Pool ÷ number of Student accounts. For 50 Students at 8 GB this is ~163 MB each.
+- **Default Budget**: a fixed per-Student allocation set server-side via `BUDGET_DEFAULT_BYTES` (default 30 MB). Conceptually this is the Displayed Pool ÷ number of Student accounts, but in practice it is a single configured constant, not recomputed from the live account count.
 - **Budget Transfer**: a Student may give away part of their own Budget to another specific Student. Transfers are peer-to-peer (Student → Student), initiated from the giver's profile UI. Staff are not required to mediate transfers.
 - A Student's effective Budget is `defaultBudget + transfersReceived − transfersGiven`.
 
@@ -177,7 +177,7 @@ Let `usage` be the sum of a Student's stored asset bytes and `budget` be the eff
 
 ### Transfer floor
 
-A Budget Transfer may not reduce the giver's effective Budget below **20 MB**. This is an absolute floor independent of current usage; a Student with high usage who transfers down to the floor will immediately enter the over-budget warning zone, but the transfer itself is permitted.
+A Budget Transfer may not reduce the giver's effective Budget below the **transfer floor** (`BUDGET_TRANSFER_FLOOR_BYTES`, default 5 MB). This is an absolute floor independent of current usage; a Student with high usage who transfers down to the floor will immediately enter the over-budget warning zone, but the transfer itself is permitted.
 
 ### Asset slot eviction
 

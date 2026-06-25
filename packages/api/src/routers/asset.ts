@@ -9,6 +9,11 @@ import { user } from "@end-show/db/schema/auth";
 
 import { getAssetStore } from "../assetStore";
 import { computeBudget } from "../budget";
+import {
+  SOFT_BAND_MULTIPLIER,
+  budgetBand,
+  budgetSoftWarning,
+} from "../budgetBand";
 import { protectedProcedure, router } from "../index";
 import { assignAsset, removeAsset } from "../studentSlots";
 
@@ -122,17 +127,22 @@ export const assetRouter = router({
         replacedBytes = priorRows[0]?.bytes ?? 0;
       }
 
-      // Hard block on budget exceed — staff bypass for emergencies.
-      if (!isStaff(ctx)) {
-        const budget = await computeBudget(userId);
-        const effectiveRemaining = budget.remainingBytes + replacedBytes;
-        if (effectiveRemaining < input.bytes) {
-          throw new TRPCError({
-            code: "PAYLOAD_TOO_LARGE",
-            message: `Not enough storage. You have ${formatMB(effectiveRemaining)} free, this upload needs ${formatMB(input.bytes)}.`,
-          });
-        }
+      // Storage band (CONTEXT.md §"Budget enforcement"): hard-block only past
+      // budget × 1.20; the soft band (over budget but within 1.20×) still
+      // uploads, with an escalating warning. Staff bypass the hard block for
+      // emergencies. The slot this upload replaces is credited back first.
+      const budget = await computeBudget(userId);
+      const prospectiveUsage = budget.usedBytes - replacedBytes + input.bytes;
+      const band = budgetBand(prospectiveUsage, budget.effectiveBudgetBytes);
+      if (band.band === "hard" && !isStaff(ctx)) {
+        const overBytes =
+          prospectiveUsage - budget.effectiveBudgetBytes * SOFT_BAND_MULTIPLIER;
+        throw new TRPCError({
+          code: "PAYLOAD_TOO_LARGE",
+          message: `Not enough storage. This upload would put you over the hard limit — free up ${formatMB(overBytes)} or receive a transfer.`,
+        });
       }
+      const softWarning = budgetSoftWarning(band);
 
       const assetId = crypto.randomUUID();
       const r2Key = store.keyFor({ userId, kind: input.kind, assetId, mimeType: input.mimeType });
@@ -141,7 +151,7 @@ export const assetRouter = router({
         mimeType: input.mimeType,
         bytes: input.bytes,
       });
-      return { assetId, r2Key, uploadUrl, expiresIn };
+      return { assetId, r2Key, uploadUrl, expiresIn, softWarning };
     }),
 
   finalizeUpload: protectedProcedure

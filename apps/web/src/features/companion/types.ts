@@ -1,17 +1,4 @@
-export type QueueSnap = {
-  stageCode: string | null;
-  items: Array<{
-    studentUserId: string;
-    source: "kiosk" | "mobile" | "rotation" | "resume";
-  }>;
-  next: string | null;
-};
-
-export type StageSnap = {
-  stageCode: string | null;
-  tracks: string[] | null;
-  current: { studentUserId: string; startedAt: number; source: string } | null;
-  dwellMs: number;
-};
+// The live Stage/Queue snapshot types now come straight from the server via
+// useStageChannel (@/lib/use-stage-channel) — no local re-declaration.
 
 export type CompanionTier = "mobile" | "kiosk";

@@ -26,6 +26,17 @@ import { useStageChannel } from "@/lib/use-stage-channel";
 import { useStudentUpdates } from "@/lib/use-student-updates";
 import { useTapGesture } from "@/lib/use-tap-gesture";
 import { cn } from "@end-show/ui/lib/utils";
+import {
+  Combobox,
+  ComboboxChip,
+  ComboboxChipRemove,
+  ComboboxChips,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+} from "@end-show/ui/components/combobox";
 
 const stageSearch = z.object({
   code: z.string().optional(),
@@ -313,14 +324,14 @@ function ConfirmGenerate({
     if (canApply) onSetCode(draft);
   };
 
-  const toggleTrack = (t: string) => {
-    // `null` means "all tracks", so seed from the full list — tapping a chip
-    // that's currently on then removes just that one (true multi-select),
-    // instead of isolating it. Collapse back to null once everything is on.
-    const set = new Set(tracks ?? availableTracks);
-    if (set.has(t)) set.delete(t);
-    else set.add(t);
-    onSetTracks(set.size === availableTracks.length ? null : Array.from(set));
+  // `null` means "all tracks" (no filter), shown as an empty selection. A
+  // subset filters; selecting everything collapses back to null.
+  const onTracksChange = (next: string[]) => {
+    onSetTracks(
+      next.length === 0 || next.length === availableTracks.length
+        ? null
+        : next,
+    );
   };
 
   useEffect(() => {
@@ -411,35 +422,50 @@ function ConfirmGenerate({
             <p className="text-center font-mono text-xs tracking-[0.25em] text-black/50 uppercase">
               tracks shown on this stage
             </p>
-            <div className="mt-3 flex flex-wrap justify-center gap-2">
-              {availableTracks.length === 0 && (
-                <span className="font-mono text-xs text-black/40">
-                  no tracks yet
-                </span>
-              )}
-              {availableTracks.map((t) => {
-                const on = !tracks || tracks.includes(t);
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => toggleTrack(t)}
-                    className={cn(
-                      "rounded-full border px-4 py-1.5 font-mono text-sm tracking-widest uppercase transition",
-                      on
-                        ? "border-black bg-black text-chalkboard"
-                        : "border-black/20 bg-white text-black/50 hover:text-black",
-                    )}
-                  >
-                    {t}
-                  </button>
-                );
-              })}
-            </div>
+            {availableTracks.length === 0 ? (
+              <p className="mt-3 text-center font-mono text-xs text-black/40">
+                no tracks yet
+              </p>
+            ) : (
+              <div className="mt-3">
+                <Combobox
+                  items={availableTracks}
+                  value={tracks ?? []}
+                  onValueChange={onTracksChange}
+                  multiple
+                >
+                  <ComboboxChips>
+                    {(tracks ?? []).map((t) => (
+                      <ComboboxChip key={t}>
+                        {t}
+                        <ComboboxChipRemove />
+                      </ComboboxChip>
+                    ))}
+                    <ComboboxInput
+                      placeholder={
+                        tracks && tracks.length > 0
+                          ? "add a track…"
+                          : "all tracks — type to limit"
+                      }
+                    />
+                  </ComboboxChips>
+                  <ComboboxContent>
+                    <ComboboxEmpty>no match</ComboboxEmpty>
+                    <ComboboxList>
+                      {(t: string) => (
+                        <ComboboxItem key={t} value={t}>
+                          {t}
+                        </ComboboxItem>
+                      )}
+                    </ComboboxList>
+                  </ComboboxContent>
+                </Combobox>
+              </div>
+            )}
             <p className="mt-2 text-center font-mono text-[11px] text-black/40">
               {tracks && tracks.length > 0
                 ? "only selected tracks rotate & can send"
-                : "all tracks shown — tap to limit"}
+                : "all tracks shown — pick to limit"}
             </p>
           </div>
         )}

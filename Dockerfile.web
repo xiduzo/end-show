@@ -17,6 +17,9 @@ RUN bun install --frozen-lockfile
 FROM deps AS builder
 ARG VITE_SERVER_URL
 ENV VITE_SERVER_URL=${VITE_SERVER_URL}
+# Optional: set to "true" to re-enable the peer budget-request UI. Defaults off.
+ARG VITE_ALLOW_BUDGET_REQUESTS
+ENV VITE_ALLOW_BUDGET_REQUESTS=${VITE_ALLOW_BUDGET_REQUESTS}
 COPY . .
 RUN cd apps/web && bun run build
 

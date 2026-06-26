@@ -1,4 +1,5 @@
 import { cn } from "@end-show/ui/lib/utils";
+import { env } from "@end-show/env/web";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -8,11 +9,10 @@ import { BorrowDialog } from "./borrow-dialog";
 import { IncomingLoanRequest } from "./incoming-loan-request";
 import { trpc } from "@/lib/trpc";
 
-// Budget requests (peer borrowing) are disabled now that the per-student budget
-// is large enough for 4K work — nobody should need to ask peers for more. Flip
-// to true to bring the "I need more →" flow back; the backend mutation and the
-// BorrowDialog are intentionally left intact so this is a one-line revert.
-const ALLOW_BUDGET_REQUESTS = false;
+// Peer budget-request ("I need more →") UI. Off by default now that the
+// per-student budget covers 4K work; set VITE_ALLOW_BUDGET_REQUESTS=true (web
+// build-arg) to bring it back. Backend mutation + BorrowDialog stay intact.
+const ALLOW_BUDGET_REQUESTS = env.VITE_ALLOW_BUDGET_REQUESTS;
 
 function formatMB(bytes: number): string {
   const mb = bytes / 1024 / 1024;

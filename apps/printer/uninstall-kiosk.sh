@@ -21,6 +21,13 @@ echo "✓ LaunchAgent removed"
 pkill -f "endshow-kiosk-profile" 2>/dev/null || true
 echo "✓ Kiosk Firefox stopped"
 
+# 2b. stop the local asset-cache nginx (started by start-show.sh)
+if command -v nginx >/dev/null; then
+  nginx -c "$HERE/nginx-cache.conf" -s quit 2>/dev/null || true
+fi
+rm -rf /tmp/endshow-asset-cache /tmp/endshow-nginx /tmp/endshow-nginx.pid
+echo "✓ Asset cache stopped + cleared"
+
 # 3. disable auto-login, only if it's currently set (needs sudo)
 if [[ -f /etc/kcpassword ]] || defaults read /Library/Preferences/com.apple.loginwindow autoLoginUser >/dev/null 2>&1; then
   echo "Disabling auto-login (needs admin)…"

@@ -87,7 +87,7 @@ export function useStageCode(): StageCodeHandle {
           ...prev,
           code: code ?? undefined,
           // Dropping the code also drops any track filter.
-          tracks: code ? prev.tracks : undefined,
+          tracks: code ? (prev.tracks as string | undefined) : undefined,
         }),
         replace: true,
       });

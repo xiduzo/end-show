@@ -27,6 +27,25 @@ FIREFOX="/Applications/Firefox.app/Contents/MacOS/firefox"
 command -v uv >/dev/null || { echo "✗ uv not found — install it first: https://docs.astral.sh/uv/"; exit 1; }
 chmod +x "$SCRIPT" "$HERE/uninstall-kiosk.sh"
 
+# nginx powers the local asset cache (apps/printer/nginx-cache.conf). Optional —
+# without it start-show.sh just serves assets straight from R2 — but install it
+# so the big screen runs off the local cache. Verify the config parses now.
+if ! command -v nginx >/dev/null; then
+  if command -v brew >/dev/null; then
+    echo "• Installing nginx (local asset cache)…"; brew install nginx || true
+  else
+    echo "⚠ nginx not found and Homebrew missing — asset cache will be skipped."
+    echo "  Install nginx to enable it: https://nginx.org/"
+  fi
+fi
+if command -v nginx >/dev/null; then
+  if nginx -c "$HERE/nginx-cache.conf" -t >/tmp/endshow-nginx-test.log 2>&1; then
+    echo "✓ nginx asset-cache config OK"
+  else
+    echo "⚠ nginx config test FAILED (see /tmp/endshow-nginx-test.log) — cache will be skipped."
+  fi
+fi
+
 # --- 1. Firefox kiosk profile ---------------------------------------------
 mkdir -p "$PROFILE"
 cat > "$PROFILE/user.js" <<'JS'

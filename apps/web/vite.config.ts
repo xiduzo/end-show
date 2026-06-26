@@ -36,27 +36,38 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/trpc/],
         runtimeCaching: [
           {
-            urlPattern: ({ request }) => request.destination === "image",
+            // Skip loopback: when the kiosk runs behind the local nginx asset
+            // cache (?proxy=http://localhost:…), nginx IS the cache. Letting the
+            // SW also CacheFirst those 150MB files would refill the browser quota
+            // the proxy exists to escape. Phones/admin (R2 host) still cache here.
+            urlPattern: ({ request, url }) =>
+              request.destination === "image" &&
+              url.hostname !== "localhost" &&
+              url.hostname !== "127.0.0.1",
             handler: "CacheFirst",
             options: {
               cacheName: "student-images-v2",
               expiration: {
                 maxEntries: 200,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
+                purgeOnQuotaError: true,
               },
               cacheableResponse: { statuses: [200] },
             },
           },
           {
             urlPattern: ({ request, url }) =>
-              request.destination === "video" ||
-              /\.(mp4|webm|mov|m4v)$/i.test(url.pathname),
+              url.hostname !== "localhost" &&
+              url.hostname !== "127.0.0.1" &&
+              (request.destination === "video" ||
+                /\.(mp4|webm|mov|m4v)$/i.test(url.pathname)),
             handler: "CacheFirst",
             options: {
               cacheName: "student-videos-v2",
               expiration: {
                 maxEntries: 50,
                 maxAgeSeconds: 60 * 60 * 24 * 30,
+                purgeOnQuotaError: true,
               },
               cacheableResponse: { statuses: [200] },
               rangeRequests: true,

@@ -21,6 +21,7 @@ import {
   usePrinterBridge,
   useStageCode,
 } from "@/features/stage";
+import { useAssetProxyBase, useProxiedAssets } from "@/lib/asset-proxy";
 import { trpc } from "@/lib/trpc";
 import { useStageChannel } from "@/lib/use-stage-channel";
 import { useStudentUpdates } from "@/lib/use-student-updates";
@@ -41,6 +42,10 @@ import {
 const stageSearch = z.object({
   code: z.string().optional(),
   tracks: z.string().optional(),
+  // Kiosk only: base URL of the local asset cache proxy (e.g.
+  // http://localhost:8080). Declared here so the router preserves it instead of
+  // stripping it as an unknown search param. See @/lib/asset-proxy.
+  proxy: z.string().optional(),
 });
 
 export const Route = createFileRoute("/")({
@@ -65,6 +70,11 @@ function StageRoute() {
   useStudentUpdates();
   usePrinterBridge(stageCode);
   const students = useQuery(trpc.student.listEligible.queryOptions());
+  // When the kiosk runs behind the local asset cache, rewrite every asset URL
+  // to go through it. No-op (same data) everywhere else. All downstream render
+  // — StageCard, AssetPreloader, UpNextBadge — reads `studentList`.
+  const proxyBase = useAssetProxyBase();
+  const studentList = useProxiedAssets(students.data, proxyBase);
 
   useTapGesture({
     enabled: !confirmOpen,
@@ -76,13 +86,13 @@ function StageRoute() {
   const { stage: snap, queue } = useStageChannel({ stageCode, tracks });
 
   const current = snap?.current
-    ? students.data?.find((s) => s.userId === snap.current!.studentUserId)
+    ? studentList?.find((s) => s.userId === snap.current!.studentUserId)
     : null;
 
   const nextId = queue?.next ?? null;
   const next =
     nextId && nextId !== snap?.current?.studentUserId
-      ? students.data?.find((s) => s.userId === nextId)
+      ? studentList?.find((s) => s.userId === nextId)
       : null;
 
   const upcomingIds = useMemo(
@@ -92,11 +102,11 @@ function StageRoute() {
 
   const availableTracks = useMemo(() => {
     const set = new Set<string>();
-    for (const s of students.data ?? []) {
+    for (const s of studentList ?? []) {
       if (s.track) set.add(s.track);
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [students.data]);
+  }, [studentList]);
 
   const [displayedNext, setDisplayedNext] = useState<StudentSummary | null>(
     null,
@@ -130,11 +140,8 @@ function StageRoute() {
 
       <ConnectionIndicator light />
 
-      {students.data && (
-        <AssetPreloader
-          students={students.data}
-          upcomingUserIds={upcomingIds}
-        />
+      {studentList && (
+        <AssetPreloader students={studentList} upcomingUserIds={upcomingIds} />
       )}
 
       {snap && (

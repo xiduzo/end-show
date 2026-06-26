@@ -23,6 +23,31 @@ PROFILE="$HOME/.endshow-kiosk-profile"
 HERE="${0:A:h}"            # absolute dir of this script (zsh)
 REPO="${HERE:h:h}"         # up two levels: apps/printer -> repo
 
+# a0) local asset cache. nginx reverse-proxies show-assets.xiduzo.com to local
+#     disk (/tmp), so the big screen serves 4K media off the LAN and never hits
+#     a browser cache-quota wall. Only flip the kiosk onto it (?proxy=…) once the
+#     config tests clean AND it's listening; if nginx is missing or unhealthy we
+#     leave PROXY empty and the page loads assets straight from R2 (the app also
+#     health-checks /healthz before trusting the proxy). Never block the show on it.
+PROXY=""
+NGINX="$(command -v nginx || true)"
+NGINX_CONF="$REPO/apps/printer/nginx-cache.conf"
+if [[ -n "$NGINX" ]] && "$NGINX" -c "$NGINX_CONF" -t >/tmp/endshow-nginx-test.log 2>&1; then
+  mkdir -p /tmp/endshow-nginx /tmp/endshow-asset-cache
+  # Already running (e.g. a KeepAlive restart of this script)? Leave it — don't
+  # drop the cache mid-show. /tmp is wiped on reboot, so a cold boot starts fresh.
+  if ! { [[ -f /tmp/endshow-nginx.pid ]] && kill -0 "$(cat /tmp/endshow-nginx.pid)" 2>/dev/null; }; then
+    "$NGINX" -c "$NGINX_CONF" 2>>/tmp/endshow-nginx-error.log || true
+    sleep 1
+  fi
+  if [[ -f /tmp/endshow-nginx.pid ]] && kill -0 "$(cat /tmp/endshow-nginx.pid)" 2>/dev/null; then
+    PROXY="?proxy=http://localhost:8080"
+    echo "asset cache: nginx up on :8080"
+  fi
+else
+  echo "asset cache: nginx unavailable — assets serve direct from R2" >&2
+fi
+
 # a) Firefox kiosk. Launch it FIRST, so the Stage page is up even if the printer
 #    has trouble. Wait for the GUI: at login we can fire before WindowServer/Dock
 #    is ready and Firefox would silently bail (wait up to 30s, then try anyway).
@@ -34,7 +59,7 @@ REPO="${HERE:h:h}"         # up two levels: apps/printer -> repo
 FIREFOX="/Applications/Firefox.app/Contents/MacOS/firefox"
 for i in {1..30}; do pgrep -xq Dock && break || sleep 1; done
 if ! pgrep -f "endshow-kiosk-profile" >/dev/null; then
-  "$FIREFOX" --kiosk --new-instance --profile "$PROFILE" "$URL" &
+  "$FIREFOX" --kiosk --new-instance --profile "$PROFILE" "$URL$PROXY" &
 fi
 
 # b) print service in the foreground; caffeinate keeps the machine + display awake

@@ -8,6 +8,12 @@ import { BorrowDialog } from "./borrow-dialog";
 import { IncomingLoanRequest } from "./incoming-loan-request";
 import { trpc } from "@/lib/trpc";
 
+// Budget requests (peer borrowing) are disabled now that the per-student budget
+// is large enough for 4K work — nobody should need to ask peers for more. Flip
+// to true to bring the "I need more →" flow back; the backend mutation and the
+// BorrowDialog are intentionally left intact so this is a one-line revert.
+const ALLOW_BUDGET_REQUESTS = false;
+
 function formatMB(bytes: number): string {
   const mb = bytes / 1024 / 1024;
   if (mb < 10) return `${mb.toFixed(1)} MB`;
@@ -364,6 +370,7 @@ export function BudgetBar({
             })}
 
             {!readOnly &&
+              ALLOW_BUDGET_REQUESTS &&
               (() => {
                 const max = budget.data.maxActiveBorrows;
                 const count = activeBorrowed.length + outgoing.length;
@@ -392,7 +399,7 @@ export function BudgetBar({
         </div>
       </div>
 
-      {!readOnly && borrowOpen && (
+      {!readOnly && ALLOW_BUDGET_REQUESTS && borrowOpen && (
         <BorrowDialog onClose={() => setBorrowOpen(false)} />
       )}
     </>

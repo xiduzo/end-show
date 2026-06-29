@@ -41,7 +41,7 @@ export class R2AssetStore implements AssetStore {
 
   isConfigured(): boolean {
     return Boolean(
-      env.R2_ACCOUNT_ID &&
+      (env.R2_ENDPOINT || env.R2_ACCOUNT_ID) &&
         env.R2_BUCKET &&
         env.R2_ACCESS_KEY_ID &&
         env.R2_SECRET_ACCESS_KEY,
@@ -90,12 +90,16 @@ export class R2AssetStore implements AssetStore {
     if (this.cached) return this.cached;
     if (!this.isConfigured()) {
       throw new Error(
-        "R2 not configured. Set R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY.",
+        "R2 not configured. Set R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and either R2_ENDPOINT or R2_ACCOUNT_ID.",
       );
     }
     this.cached = new S3Client({
       region: "auto",
-      endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      endpoint:
+        env.R2_ENDPOINT ??
+        `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      // Self-hosted S3 backends (RustFS/MinIO/Garage) need path-style addressing.
+      forcePathStyle: env.R2_FORCE_PATH_STYLE ?? false,
       credentials: {
         accessKeyId: env.R2_ACCESS_KEY_ID!,
         secretAccessKey: env.R2_SECRET_ACCESS_KEY!,

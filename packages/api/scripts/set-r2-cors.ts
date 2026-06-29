@@ -2,7 +2,7 @@ import { PutBucketCorsCommand, S3Client } from "@aws-sdk/client-s3";
 import { env } from "@end-show/env/server";
 
 if (
-  !env.R2_ACCOUNT_ID ||
+  !(env.R2_ENDPOINT || env.R2_ACCOUNT_ID) ||
   !env.R2_BUCKET ||
   !env.R2_ACCESS_KEY_ID ||
   !env.R2_SECRET_ACCESS_KEY
@@ -16,7 +16,9 @@ const allowedOrigins =
 
 const client = new S3Client({
   region: "auto",
-  endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  endpoint:
+    env.R2_ENDPOINT ?? `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  forcePathStyle: env.R2_FORCE_PATH_STYLE ?? false,
   credentials: {
     accessKeyId: env.R2_ACCESS_KEY_ID,
     secretAccessKey: env.R2_SECRET_ACCESS_KEY,

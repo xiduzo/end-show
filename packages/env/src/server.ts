@@ -29,6 +29,10 @@ export const env = createEnv({
     R2_ACCESS_KEY_ID: z.string().min(1).optional(),
     R2_SECRET_ACCESS_KEY: z.string().min(1).optional(),
     R2_PUBLIC_URL: z.url().optional(),
+    // Custom S3-compatible endpoint (RustFS/MinIO/Garage). When set, overrides
+    // the Cloudflare R2 endpoint. Self-hosted backends need path-style addressing.
+    R2_ENDPOINT: z.url().optional(),
+    R2_FORCE_PATH_STYLE: z.coerce.boolean().optional(),
     BUDGET_DEFAULT_BYTES: z.coerce
       .number()
       .int()

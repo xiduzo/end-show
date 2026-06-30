@@ -45,7 +45,10 @@ if [[ -n "$NGINX" ]] && "$NGINX" -c "$NGINX_CONF" -t >/tmp/endshow-nginx-test.lo
     sleep 1
   fi
   if [[ -f /tmp/endshow-nginx.pid ]] && kill -0 "$(cat /tmp/endshow-nginx.pid)" 2>/dev/null; then
-    PROXY="?proxy=http://localhost:8080"
+    # URL-encode the value (http%3A%2F%2Flocalhost%3A8080). `:` and `/` are legal
+    # in a query value and URLSearchParams.get() decodes either form, so the bare
+    # form also works — but encode it so the param stays unambiguous.
+    PROXY="?proxy=http%3A%2F%2Flocalhost%3A8080"
     echo "asset cache: nginx up on :8080"
   fi
 else

@@ -37,6 +37,11 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
     // doesn't emit a student update, so without this the idle-hidden Student
     // would stay parked off the wall for the life of the page load.
     refetchInterval: 60_000,
+    // Wall is a long-lived kiosk/tab. The global default disables these, but
+    // here we want the freshest list the moment the window is foregrounded or
+    // the network reconnects — the WS feed may have dropped while backgrounded.
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
   const push = useMutation(trpc.queue.push.mutationOptions());
   // Companion omits `tracks` — only the Stage owns the channel's track filter.

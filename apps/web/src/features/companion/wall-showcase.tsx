@@ -18,7 +18,6 @@ export function WallShowcase({
   sourceCardRect,
   sourceImageRect,
   isOnStage,
-  isQueued,
   onClose,
   onSend,
 }: {
@@ -28,7 +27,6 @@ export function WallShowcase({
   sourceCardRect: DOMRect;
   sourceImageRect: DOMRect;
   isOnStage: boolean;
-  isQueued: boolean;
   onClose: () => void;
   onSend: () => Promise<boolean>;
 }) {
@@ -353,12 +351,7 @@ export function WallShowcase({
                       !sendDisabled && "hover:brightness-110",
                     )}
                   >
-                    ↑{" "}
-                    {isOnStage
-                      ? "extend stage"
-                      : isQueued
-                        ? "bump in queue"
-                        : "send to stage"}
+                    ↑ {isOnStage ? "extend stage" : "send to stage"}
                   </button>
                   {printer.available && (
                     <button

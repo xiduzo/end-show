@@ -119,10 +119,6 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
     [queue],
   );
   const inFlight = useMemo(() => new Set(fullQueue), [fullQueue]);
-  const showcasedQueuedPos =
-    showcased && inFlight.has(showcased.userId)
-      ? fullQueue.indexOf(showcased.userId) + 1
-      : null;
   const isShowcasedOnStage =
     showcased != null && showcased.userId === onStageId;
 
@@ -240,7 +236,6 @@ export function CompanionView({ tier }: { tier: CompanionTier }) {
             sourceCardRect={sourceRects.card}
             sourceImageRect={sourceRects.image}
             isOnStage={isShowcasedOnStage}
-            isQueued={showcasedQueuedPos != null && !isShowcasedOnStage}
             onClose={() => setShowcasedId(null)}
             onSend={async () => {
               const target = showcased;

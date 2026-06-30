@@ -63,7 +63,7 @@ export type MyProfile = {
   reviewRequest: "none" | "pending" | "denied";
 };
 
-function isComplete(s: Omit<StudentSummary, "portraitUrl" | "workMediaKind">): boolean {
+function isComplete(s: Omit<StudentSummary, "workMediaKind">): boolean {
   return isStudentProfileComplete(s, s.competencies.length);
 }
 

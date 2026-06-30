@@ -167,7 +167,11 @@ export const adminRouter = router({
         const updatedAt = s?.updatedAt ?? u.createdAt;
         const comps = compsByUser.get(u.id) ?? [];
         const isComplete = Boolean(
-          s && isStudentProfileComplete({ ...s, workMediaUrl }, comps.length),
+          s &&
+            isStudentProfileComplete(
+              { ...s, workMediaUrl, portraitUrl },
+              comps.length,
+            ),
         );
         return {
           userId: u.id,

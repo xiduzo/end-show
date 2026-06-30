@@ -29,6 +29,7 @@ function complete(userId: string, extra?: Partial<MemStudent>): MemStudent {
     userId,
     displayName: "Name",
     introduction: "Intro",
+    portraitAssetId: "portrait",
     workMediaAssetId: "work",
     competencyCount: 1,
     ...extra,

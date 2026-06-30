@@ -39,6 +39,9 @@ if ! command -v nginx >/dev/null; then
   fi
 fi
 if command -v nginx >/dev/null; then
+  # nginx's mkdir is non-recursive; pre-create the temp parent or `-t` fails to
+  # create client_body_temp_path and falsely reports a broken config.
+  mkdir -p /tmp/endshow-nginx /tmp/endshow-asset-cache
   if nginx -c "$HERE/nginx-cache.conf" -t >/tmp/endshow-nginx-test.log 2>&1; then
     echo "✓ nginx asset-cache config OK"
   else

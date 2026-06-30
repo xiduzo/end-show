@@ -23,6 +23,7 @@ export type EligibilityCandidate = {
   userId: string;
   displayName: string;
   introduction: string;
+  portraitAssetId: string | null;
   workMediaAssetId: string | null;
   competencyCount: number;
 };
@@ -96,6 +97,7 @@ export class DrizzleStudentDataStore implements StudentDataStore {
         userId: student.userId,
         displayName: student.displayName,
         introduction: student.introduction,
+        portraitAssetId: student.portraitAssetId,
         workMediaAssetId: student.workMediaAssetId,
       })
       .from(student)
@@ -119,6 +121,7 @@ export class DrizzleStudentDataStore implements StudentDataStore {
       userId: r.userId,
       displayName: r.displayName,
       introduction: r.introduction,
+      portraitAssetId: r.portraitAssetId,
       workMediaAssetId: r.workMediaAssetId,
       competencyCount: compCount.get(r.userId) ?? 0,
     }));
@@ -140,6 +143,7 @@ export type MemStudent = {
   displayName?: string;
   introduction?: string;
   track?: string;
+  portraitAssetId?: string | null;
   workMediaAssetId?: string | null;
   isFlagged?: boolean;
   competencyCount?: number;
@@ -198,6 +202,7 @@ export class InMemoryStudentDataStore implements StudentDataStore {
         userId: s.userId,
         displayName: s.displayName ?? "",
         introduction: s.introduction ?? "",
+        portraitAssetId: s.portraitAssetId ?? null,
         workMediaAssetId: s.workMediaAssetId ?? null,
         competencyCount: s.competencyCount ?? 0,
       }));

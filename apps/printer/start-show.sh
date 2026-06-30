@@ -32,8 +32,12 @@ REPO="${HERE:h:h}"         # up two levels: apps/printer -> repo
 PROXY=""
 NGINX="$(command -v nginx || true)"
 NGINX_CONF="$REPO/apps/printer/nginx-cache.conf"
+# Make the temp/cache dirs BEFORE `-t`: nginx's mkdir is non-recursive, so the
+# config test itself fails to create client_body_temp_path (/tmp/endshow-nginx/
+# client) when the parent /tmp/endshow-nginx is missing — and that failure would
+# leave PROXY empty and silently drop the cache. Create them first, then test.
+mkdir -p /tmp/endshow-nginx /tmp/endshow-asset-cache
 if [[ -n "$NGINX" ]] && "$NGINX" -c "$NGINX_CONF" -t >/tmp/endshow-nginx-test.log 2>&1; then
-  mkdir -p /tmp/endshow-nginx /tmp/endshow-asset-cache
   # Already running (e.g. a KeepAlive restart of this script)? Leave it — don't
   # drop the cache mid-show. /tmp is wiped on reboot, so a cold boot starts fresh.
   if ! { [[ -f /tmp/endshow-nginx.pid ]] && kill -0 "$(cat /tmp/endshow-nginx.pid)" 2>/dev/null; }; then

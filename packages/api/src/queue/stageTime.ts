@@ -45,6 +45,7 @@ async function eligibleStudentIds(
           displayName: c.displayName,
           introduction: c.introduction,
           workMediaUrl: c.workMediaAssetId,
+          portraitUrl: c.portraitAssetId,
           pronouns: null,
         },
         c.competencyCount,

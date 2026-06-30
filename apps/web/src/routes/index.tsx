@@ -23,6 +23,7 @@ import {
 } from "@/features/stage";
 import { useAssetProxyBase, useProxiedAssets } from "@/lib/asset-proxy";
 import { trpc } from "@/lib/trpc";
+import { useIdleCursor } from "@/lib/use-idle-cursor";
 import { useStageChannel } from "@/lib/use-stage-channel";
 import { useStudentUpdates } from "@/lib/use-student-updates";
 import { useTapGesture } from "@/lib/use-tap-gesture";
@@ -80,6 +81,9 @@ function StageRoute() {
     enabled: !confirmOpen,
     onTrigger: () => setConfirmOpen(true),
   });
+
+  // Kiosk parks a cursor in the top-left at boot; hide it until the mouse moves.
+  useIdleCursor();
 
   // The Stage owns its track filter, so it passes `tracks` (null = all tracks,
   // which also clears any stale filter on the channel).

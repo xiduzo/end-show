@@ -1,1 +1,7 @@
 @import "@end-show/ui/globals.css";
+
+/* Kiosk: hide the cursor while idle. Toggled by useIdleCursor. */
+html.cursor-idle,
+html.cursor-idle * {
+  cursor: none !important;
+}

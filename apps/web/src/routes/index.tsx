@@ -23,6 +23,7 @@ import {
 } from "@/features/stage";
 import { useAssetProxyBase, useProxiedAssets } from "@/lib/asset-proxy";
 import { trpc } from "@/lib/trpc";
+import { useKioskAssetWarmer } from "@/lib/use-asset-warmer";
 import { useIdleCursor } from "@/lib/use-idle-cursor";
 import { useStageChannel } from "@/lib/use-stage-channel";
 import { useStudentUpdates } from "@/lib/use-student-updates";
@@ -76,6 +77,9 @@ function StageRoute() {
   // — StageCard, AssetPreloader, UpNextBadge — reads `studentList`.
   const proxyBase = useAssetProxyBase();
   const studentList = useProxiedAssets(students.data, proxyBase);
+  // Kiosk only: eagerly pull EVERY student's work media into the local nginx
+  // cache at show start (AssetPreloader only warms the next 3). No-op elsewhere.
+  useKioskAssetWarmer(studentList, proxyBase);
 
   useTapGesture({
     enabled: !confirmOpen,
